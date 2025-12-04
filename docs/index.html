@@ -384,12 +384,40 @@
     <main class="container">
         <section class="card">
             <h2>
+                <span class="section-icon">📍</span>
+                Address Geocoder
+            </h2>
+            <p class="section-description">
+                Convert a list of addresses into latitude/longitude coordinates using the Google Maps API.
+                Use this first if your address list doesn't have coordinates yet.
+            </p>
+            <div class="feature-list">
+                <div class="feature">
+                    <span class="feature-icon">📄</span>
+                    <span>Upload CSV with Address, City, State, Zip</span>
+                </div>
+                <div class="feature">
+                    <span class="feature-icon">🌐</span>
+                    <span>Uses Google Geocoding API</span>
+                </div>
+                <div class="feature">
+                    <span class="feature-icon">📥</span>
+                    <span>Download CSV with lat/long added</span>
+                </div>
+            </div>
+            <a href="geocoder.html" class="btn-primary">
+                Open Geocoder
+            </a>
+        </section>
+
+        <section class="card">
+            <h2>
                 <span class="section-icon">📊</span>
                 Route Optimizer
             </h2>
             <p class="section-description">
                 Create optimized pickup routes for letter carrier food drive volunteers.
-                Upload addresses, set the number of drivers, and generate efficient routes
+                Upload addresses with coordinates, set the number of drivers, and generate efficient routes
                 that end at the drop-off location.
             </p>
             <div class="feature-list">

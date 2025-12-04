@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Address Geocoder - Betty Lou's Pantry</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #E87C1E 0%, #C4650F 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .container { max-width: 800px; margin: 0 auto; }
+        header { text-align: center; color: white; margin-bottom: 30px; }
+        .logo {
+            width: 100px; height: 100px; background: white; border-radius: 50%;
+            margin: 0 auto 15px; display: flex; align-items: center; justify-content: center;
+            font-size: 2.5rem; box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+        }
+        header h1 { font-size: 1.8rem; margin-bottom: 5px; }
+        header p { font-size: 1rem; opacity: 0.9; }
+        .card {
+            background: white; border-radius: 12px; padding: 25px;
+            margin-bottom: 20px; box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+        }
+        .card h2 { color: #333; margin-bottom: 15px; font-size: 1.2rem; }
+        .card p { color: #666; margin-bottom: 15px; line-height: 1.6; }
+        .form-group { margin-bottom: 15px; }
+        .form-group label { display: block; font-weight: 500; color: #333; margin-bottom: 5px; }
+        .form-group input[type="text"] {
+            width: 100%; padding: 12px 15px; font-size: 1rem;
+            border: 2px solid #ddd; border-radius: 8px;
+        }
+        .form-group input:focus { outline: none; border-color: #E87C1E; }
+        .form-group small { color: #888; display: block; margin-top: 5px; }
+        .btn {
+            padding: 12px 25px; font-size: 1rem; font-weight: 600;
+            border: none; border-radius: 8px; cursor: pointer; transition: all 0.2s ease;
+        }
+        .btn-primary { background: linear-gradient(135deg, #E87C1E 0%, #C4650F 100%); color: white; }
+        .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 5px 20px rgba(232, 124, 30, 0.4); }
+        .btn-primary:disabled { background: #ccc; cursor: not-allowed; transform: none; box-shadow: none; }
+        .btn-secondary { background: #f5f5f5; color: #333; border: 2px solid #ddd; }
+        .drop-zone {
+            border: 3px dashed #ccc; border-radius: 10px; padding: 30px;
+            text-align: center; cursor: pointer; transition: all 0.3s ease; background: #f9f9f9;
+        }
+        .drop-zone:hover, .drop-zone.dragover { border-color: #E87C1E; background: #fff8f0; }
+        .drop-zone.loaded { border-color: #4CAF50; background: #f0fff0; }
+        .drop-zone .icon { font-size: 2.5rem; margin-bottom: 10px; }
+        input[type="file"] { display: none; }
+        .example-box {
+            background: #f5f5f5; border-radius: 8px; padding: 15px;
+            font-family: monospace; font-size: 0.85rem; overflow-x: auto;
+            margin: 10px 0; border-left: 4px solid #E87C1E;
+        }
+        .example-box.output { border-left-color: #4CAF50; }
+        .arrow { text-align: center; font-size: 2rem; color: #E87C1E; margin: 15px 0; }
+        .progress { margin-top: 20px; }
+        .progress-bar { height: 10px; background: #e0e0e0; border-radius: 5px; overflow: hidden; }
+        .progress-fill {
+            height: 100%; background: linear-gradient(135deg, #E87C1E 0%, #C4650F 100%);
+            width: 0%; transition: width 0.3s ease;
+        }
+        .progress-text { text-align: center; margin-top: 10px; font-size: 0.95rem; color: #666; }
+        .stats { display: flex; gap: 15px; margin: 15px 0; flex-wrap: wrap; }
+        .stat { background: #f5f5f5; padding: 8px 15px; border-radius: 8px; font-size: 0.9rem; }
+        .stat.success { background: #e8f5e9; color: #2e7d32; }
+        .stat.error { background: #ffebee; color: #c62828; }
+        .back-link { display: inline-block; color: white; margin-bottom: 20px; text-decoration: none; }
+        .back-link:hover { text-decoration: underline; }
+        .step-number {
+            display: inline-flex; align-items: center; justify-content: center;
+            width: 28px; height: 28px; background: #E87C1E; color: white;
+            border-radius: 50%; font-weight: 600; margin-right: 10px; font-size: 0.9rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="index.html" class="back-link">← Back to Home</a>
+
+        <header>
+            <div class="logo">📍</div>
+            <h1>Address Geocoder</h1>
+            <p>Convert addresses to latitude/longitude coordinates</p>
+        </header>
+
+        <div class="card">
+            <h2><span class="step-number">1</span> Google Maps API Key</h2>
+            <div class="form-group">
+                <label for="apiKey">API Key</label>
+                <input type="text" id="apiKey" placeholder="AIzaSy...">
+                <small>Get a key from <a href="https://console.cloud.google.com/apis/credentials" target="_blank">Google Cloud Console</a>. Enable "Geocoding API".</small>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2><span class="step-number">2</span> Upload Your CSV</h2>
+            <p>Your CSV should have these columns: <strong>Address, City, State, Zip</strong></p>
+
+            <p style="font-weight: 500; margin-top: 15px; color: #333;">Input format:</p>
+            <div class="example-box">
+Address,City,State,Zip<br>
+123 Main St,Center Valley,PA,18034<br>
+456 Oak Ave,Coopersburg,PA,18036<br>
+PO BOX 100,Center Valley,PA,18034-0100
+            </div>
+
+            <div class="drop-zone" id="dropZone">
+                <div class="icon">📄</div>
+                <p><strong>Drop your CSV file here</strong></p>
+                <p style="color: #888; font-size: 0.9rem;">or click to browse</p>
+                <input type="file" id="fileInput" accept=".csv">
+            </div>
+            <div class="stats" id="fileStats" style="display: none;"></div>
+        </div>
+
+        <div class="card">
+            <h2><span class="step-number">3</span> Geocode & Download</h2>
+            <p>Click the button below to geocode all addresses. This may take a few minutes for large files.</p>
+
+            <button class="btn btn-primary" id="geocodeBtn" disabled>Geocode Addresses</button>
+
+            <div class="progress" id="progressSection" style="display: none;">
+                <div class="progress-bar">
+                    <div class="progress-fill" id="progressFill"></div>
+                </div>
+                <div class="progress-text" id="progressText">Starting...</div>
+            </div>
+
+            <div id="resultsSection" style="display: none; margin-top: 20px;">
+                <p style="font-weight: 500; color: #333;">Output format:</p>
+                <div class="example-box output">
+Address,City,State,Zip,Latitude,Longitude<br>
+123 Main St,Center Valley,PA,18034,40.5421,-75.3892<br>
+456 Oak Ave,Coopersburg,PA,18036,40.5193,-75.3897<br>
+PO BOX 100,Center Valley,PA,18034-0100,40.5362,-75.3956
+                </div>
+                <div class="stats" id="resultStats"></div>
+                <button class="btn btn-primary" id="downloadBtn" style="margin-top: 10px;">Download data.csv</button>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>Next Step</h2>
+            <p>After downloading <code>data.csv</code>, copy it into the <code>docs/</code> folder of this repository and rename it to <code>addresses.csv</code>. Then use the <a href="routeoptimizer.html">Route Optimizer</a> to generate driver routes.</p>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+    <script>
+    (function() {
+        var rawAddresses = [];
+        var apiKeyInput = document.getElementById('apiKey');
+        var dropZone = document.getElementById('dropZone');
+        var fileInput = document.getElementById('fileInput');
+        var fileStats = document.getElementById('fileStats');
+        var geocodeBtn = document.getElementById('geocodeBtn');
+        var progressSection = document.getElementById('progressSection');
+        var progressFill = document.getElementById('progressFill');
+        var progressText = document.getElementById('progressText');
+        var resultsSection = document.getElementById('resultsSection');
+        var resultStats = document.getElementById('resultStats');
+        var downloadBtn = document.getElementById('downloadBtn');
+
+        // Load saved API key
+        var savedKey = localStorage.getItem('gmapsApiKey');
+        if (savedKey) apiKeyInput.value = savedKey;
+        apiKeyInput.addEventListener('change', function() {
+            localStorage.setItem('gmapsApiKey', apiKeyInput.value);
+        });
+
+        // File upload
+        dropZone.addEventListener('click', function() { fileInput.click(); });
+        dropZone.addEventListener('dragover', function(e) { e.preventDefault(); dropZone.classList.add('dragover'); });
+        dropZone.addEventListener('dragleave', function() { dropZone.classList.remove('dragover'); });
+        dropZone.addEventListener('drop', function(e) {
+            e.preventDefault();
+            dropZone.classList.remove('dragover');
+            if (e.dataTransfer.files[0]) handleFile(e.dataTransfer.files[0]);
+        });
+        fileInput.addEventListener('change', function(e) {
+            if (e.target.files[0]) handleFile(e.target.files[0]);
+        });
+
+        function handleFile(file) {
+            if (!file.name.endsWith('.csv')) {
+                alert('Please upload a CSV file');
+                return;
+            }
+
+            Papa.parse(file, {
+                header: true,
+                skipEmptyLines: true,
+                complete: function(result) {
+                    processCSV(result.data, file.name);
+                },
+                error: function(error) {
+                    alert('Error parsing CSV: ' + error.message);
+                }
+            });
+        }
+
+        function processCSV(data, filename) {
+            rawAddresses = [];
+
+            for (var i = 0; i < data.length; i++) {
+                var row = data[i];
+                var parts = [];
+                if (row.Address) parts.push(row.Address);
+                if (row.City) parts.push(row.City);
+                if (row.State) parts.push(row.State);
+                if (row.Zip) parts.push(row.Zip);
+
+                if (parts.length > 0) {
+                    rawAddresses.push({
+                        address: row.Address || '',
+                        city: row.City || '',
+                        state: row.State || '',
+                        zip: row.Zip || '',
+                        fullAddress: parts.join(', '),
+                        lat: null,
+                        lng: null
+                    });
+                }
+            }
+
+            dropZone.classList.add('loaded');
+            dropZone.innerHTML = '<div class="icon">✅</div><p><strong>' + filename + '</strong></p><p style="color:#666;">Click to upload a different file</p>';
+
+            fileStats.style.display = 'flex';
+            fileStats.innerHTML = '<div class="stat success">✓ ' + rawAddresses.length.toLocaleString() + ' addresses loaded</div>';
+
+            geocodeBtn.disabled = false;
+            resultsSection.style.display = 'none';
+        }
+
+        // Geocoding
+        geocodeBtn.addEventListener('click', function() {
+            var apiKey = apiKeyInput.value.trim();
+            if (!apiKey) {
+                alert('Please enter your Google Maps API key first');
+                return;
+            }
+
+            if (rawAddresses.length === 0) {
+                alert('Please upload a CSV file first');
+                return;
+            }
+
+            geocodeBtn.disabled = true;
+            geocodeBtn.textContent = 'Geocoding...';
+            progressSection.style.display = 'block';
+            resultsSection.style.display = 'none';
+
+            geocodeAll(apiKey);
+        });
+
+        function geocodeAll(apiKey) {
+            var total = rawAddresses.length;
+            var current = 0;
+            var successCount = 0;
+            var failCount = 0;
+
+            function next() {
+                if (current >= total) {
+                    // Done
+                    geocodeBtn.textContent = 'Geocode Addresses';
+                    geocodeBtn.disabled = false;
+                    progressFill.style.width = '100%';
+                    progressText.textContent = 'Complete!';
+
+                    resultStats.innerHTML = '<div class="stat success">✓ ' + successCount.toLocaleString() + ' geocoded</div>';
+                    if (failCount > 0) {
+                        resultStats.innerHTML += '<div class="stat error">✗ ' + failCount + ' failed</div>';
+                    }
+                    resultsSection.style.display = 'block';
+                    return;
+                }
+
+                var addr = rawAddresses[current];
+                var url = 'https://maps.googleapis.com/maps/api/geocode/json?address=' +
+                    encodeURIComponent(addr.fullAddress) + '&key=' + apiKey;
+
+                fetch(url)
+                    .then(function(r) { return r.json(); })
+                    .then(function(data) {
+                        if (data.status === 'OK' && data.results && data.results[0]) {
+                            var loc = data.results[0].geometry.location;
+                            addr.lat = loc.lat;
+                            addr.lng = loc.lng;
+                            successCount++;
+                        } else {
+                            failCount++;
+                        }
+                    })
+                    .catch(function() { failCount++; })
+                    .finally(function() {
+                        current++;
+                        var pct = Math.round((current / total) * 100);
+                        progressFill.style.width = pct + '%';
+                        progressText.textContent = current.toLocaleString() + ' / ' + total.toLocaleString() + ' (' + pct + '%)';
+                        setTimeout(next, 50);
+                    });
+            }
+
+            next();
+        }
+
+        // Download
+        downloadBtn.addEventListener('click', function() {
+            var csv = 'Address,City,State,Zip,Latitude,Longitude\n';
+            for (var i = 0; i < rawAddresses.length; i++) {
+                var a = rawAddresses[i];
+                csv += '"' + (a.address || '').replace(/"/g, '""') + '",';
+                csv += '"' + (a.city || '').replace(/"/g, '""') + '",';
+                csv += '"' + (a.state || '').replace(/"/g, '""') + '",';
+                csv += '"' + (a.zip || '').replace(/"/g, '""') + '",';
+                csv += (a.lat || '') + ',';
+                csv += (a.lng || '') + '\n';
+            }
+
+            var blob = new Blob([csv], { type: 'text/csv' });
+            var url = URL.createObjectURL(blob);
+            var link = document.createElement('a');
+            link.href = url;
+            link.download = 'data.csv';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+        });
+    })();
+    </script>
+</body>
+</html>
