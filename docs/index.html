@@ -1,0 +1,553 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Betty Lou's Pantry - Letter Carrier Food Drive</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #E87C1E 0%, #C4650F 100%);
+            min-height: 100vh;
+            color: #333;
+            line-height: 1.5;
+        }
+
+        /* Hero Section */
+        .hero {
+            text-align: center;
+            padding: 60px 20px 80px;
+            color: white;
+        }
+
+        .logo {
+            width: 120px;
+            height: 120px;
+            background: white;
+            border-radius: 50%;
+            margin: 0 auto 25px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 3.5rem;
+            box-shadow: 0 8px 30px rgba(0, 0, 0, 0.2);
+        }
+
+        .hero h1 {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.2);
+        }
+
+        .tagline {
+            font-size: 1.3rem;
+            opacity: 0.95;
+            margin-bottom: 8px;
+        }
+
+        .location {
+            font-size: 1rem;
+            opacity: 0.85;
+            margin-bottom: 25px;
+        }
+
+        .btn-hero {
+            display: inline-block;
+            padding: 14px 32px;
+            background: white;
+            color: #E87C1E;
+            text-decoration: none;
+            border-radius: 8px;
+            font-weight: 600;
+            font-size: 1rem;
+            transition: all 0.2s ease;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.15);
+        }
+
+        .btn-hero:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 25px rgba(0, 0, 0, 0.25);
+        }
+
+        /* Container */
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 0 20px 40px;
+        }
+
+        /* Cards */
+        .card {
+            background: white;
+            border-radius: 12px;
+            padding: 30px;
+            margin-bottom: 25px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.15);
+        }
+
+        .card h2 {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-size: 1.4rem;
+            margin-bottom: 15px;
+            color: #333;
+        }
+
+        .section-icon {
+            font-size: 1.6rem;
+        }
+
+        .section-description {
+            color: #666;
+            margin-bottom: 20px;
+            font-size: 1rem;
+        }
+
+        /* Feature List */
+        .feature-list {
+            display: grid;
+            gap: 12px;
+            margin-bottom: 25px;
+        }
+
+        .feature {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px 15px;
+            background: #f9f9f9;
+            border-radius: 8px;
+        }
+
+        .feature-icon {
+            font-size: 1.3rem;
+        }
+
+        /* Primary Button */
+        .btn-primary {
+            display: inline-block;
+            padding: 14px 28px;
+            background: linear-gradient(135deg, #E87C1E 0%, #C4650F 100%);
+            color: white;
+            text-decoration: none;
+            border-radius: 8px;
+            font-weight: 600;
+            font-size: 1rem;
+            transition: all 0.2s ease;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(232, 124, 30, 0.4);
+        }
+
+        /* Routes Section */
+        .routes-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+
+        .routes-updated {
+            font-size: 0.85rem;
+            color: #888;
+        }
+
+        .routes-list {
+            margin-top: 20px;
+            max-height: 500px;
+            overflow-y: auto;
+        }
+
+        .route-card {
+            display: flex;
+            align-items: center;
+            padding: 18px 20px;
+            background: #f9f9f9;
+            border-radius: 10px;
+            margin-bottom: 12px;
+            text-decoration: none;
+            color: inherit;
+            transition: all 0.2s ease;
+            border: 2px solid transparent;
+        }
+
+        .route-card:hover {
+            background: #fff8f0;
+            border-color: #E87C1E;
+            transform: translateX(5px);
+        }
+
+        .route-icon {
+            font-size: 2rem;
+            margin-right: 18px;
+        }
+
+        .route-info {
+            flex: 1;
+        }
+
+        .route-info h3 {
+            font-size: 1.1rem;
+            margin-bottom: 6px;
+            color: #333;
+        }
+
+        .route-stats {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .badge {
+            padding: 4px 12px;
+            border-radius: 15px;
+            font-size: 0.85rem;
+            font-weight: 500;
+        }
+
+        .badge.stops {
+            background: #E87C1E;
+            color: white;
+        }
+
+        .badge.miles {
+            background: #2196F3;
+            color: white;
+        }
+
+        .route-arrow {
+            font-size: 1.5rem;
+            color: #ccc;
+            transition: color 0.2s;
+        }
+
+        .route-card:hover .route-arrow {
+            color: #E87C1E;
+        }
+
+        /* Empty State */
+        .empty-state {
+            text-align: center;
+            padding: 40px 20px;
+            color: #888;
+        }
+
+        .empty-icon {
+            font-size: 3rem;
+            margin-bottom: 15px;
+            opacity: 0.5;
+        }
+
+        .empty-hint {
+            font-size: 0.9rem;
+            margin-top: 10px;
+        }
+
+        /* Loading State */
+        .loading-state {
+            text-align: center;
+            padding: 30px;
+            color: #888;
+        }
+
+        /* Footer */
+        .footer {
+            background: rgba(0, 0, 0, 0.15);
+            padding: 30px 20px;
+            margin-top: 20px;
+        }
+
+        .footer-content {
+            max-width: 900px;
+            margin: 0 auto;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 20px;
+            color: white;
+        }
+
+        .footer-brand {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-weight: 600;
+            font-size: 1.1rem;
+        }
+
+        .footer-logo {
+            font-size: 1.5rem;
+        }
+
+        .footer-links {
+            display: flex;
+            gap: 25px;
+        }
+
+        .footer-links a {
+            color: white;
+            text-decoration: none;
+            opacity: 0.9;
+            transition: opacity 0.2s;
+        }
+
+        .footer-links a:hover {
+            opacity: 1;
+            text-decoration: underline;
+        }
+
+        .footer-info {
+            font-size: 0.9rem;
+            opacity: 0.85;
+        }
+
+        /* Responsive */
+        @media (max-width: 600px) {
+            .hero {
+                padding: 40px 15px 60px;
+            }
+
+            .hero h1 {
+                font-size: 1.8rem;
+            }
+
+            .logo {
+                width: 100px;
+                height: 100px;
+                font-size: 2.8rem;
+            }
+
+            .tagline {
+                font-size: 1.1rem;
+            }
+
+            .container {
+                padding: 0 15px 30px;
+            }
+
+            .card {
+                padding: 20px;
+            }
+
+            .card h2 {
+                font-size: 1.2rem;
+            }
+
+            .route-card {
+                padding: 15px;
+            }
+
+            .route-icon {
+                font-size: 1.6rem;
+                margin-right: 12px;
+            }
+
+            .route-info h3 {
+                font-size: 1rem;
+            }
+
+            .footer-content {
+                flex-direction: column;
+                text-align: center;
+            }
+
+            .footer-links {
+                flex-direction: column;
+                gap: 10px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <header class="hero">
+        <div class="logo">🍞</div>
+        <h1>Betty Lou's Pantry</h1>
+        <p class="tagline">Letter Carrier Food Drive</p>
+        <p class="location">Coopersburg, PA</p>
+        <a href="https://bettylouspantry.com/" class="btn-hero" target="_blank" rel="noopener">
+            Visit Our Website
+        </a>
+    </header>
+
+    <main class="container">
+        <section class="card">
+            <h2>
+                <span class="section-icon">📊</span>
+                Route Optimizer
+            </h2>
+            <p class="section-description">
+                Create optimized pickup routes for letter carrier food drive volunteers.
+                Upload addresses, set the number of drivers, and generate efficient routes
+                that end at the drop-off location.
+            </p>
+            <div class="feature-list">
+                <div class="feature">
+                    <span class="feature-icon">📁</span>
+                    <span>Upload CSV with addresses and coordinates</span>
+                </div>
+                <div class="feature">
+                    <span class="feature-icon">🗺️</span>
+                    <span>K-means clustering groups addresses by geography</span>
+                </div>
+                <div class="feature">
+                    <span class="feature-icon">🚗</span>
+                    <span>Nearest-neighbor algorithm optimizes route order</span>
+                </div>
+                <div class="feature">
+                    <span class="feature-icon">📥</span>
+                    <span>Download routes as HTML or TXT files</span>
+                </div>
+            </div>
+            <a href="routeoptimizer.html" class="btn-primary">
+                Open Route Optimizer
+            </a>
+        </section>
+
+        <section class="card">
+            <div class="routes-header">
+                <h2>
+                    <span class="section-icon">📋</span>
+                    Driver Routes
+                </h2>
+                <span class="routes-updated" id="routes-updated"></span>
+            </div>
+            <p class="section-description">
+                View individual driver route pages with interactive maps and turn-by-turn addresses.
+            </p>
+            <div class="routes-list" id="routes-list">
+                <div class="loading-state">Loading routes...</div>
+            </div>
+        </section>
+    </main>
+
+    <footer class="footer">
+        <div class="footer-content">
+            <div class="footer-brand">
+                <span class="footer-logo">🍞</span>
+                <span>Betty Lou's Pantry</span>
+            </div>
+            <div class="footer-links">
+                <a href="https://bettylouspantry.com/" target="_blank" rel="noopener">Main Website</a>
+                <a href="https://bettylouspantry.com/how-to-help" target="_blank" rel="noopener">How to Help</a>
+            </div>
+            <div class="footer-info">
+                538 Thomas St, Coopersburg, PA 18036
+            </div>
+        </div>
+    </footer>
+
+    <script>
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        // Extract driver name and stats from route HTML content
+        function parseRouteHtml(html) {
+            const parser = new DOMParser();
+            const doc = parser.parseFromString(html, 'text/html');
+
+            // Get driver name from h1 or title
+            let name = 'Unknown Driver';
+            const h1 = doc.querySelector('h1');
+            if (h1) {
+                name = h1.textContent.replace('🍞', '').trim();
+            } else {
+                const title = doc.querySelector('title');
+                if (title) {
+                    name = title.textContent.split('-')[0].trim();
+                }
+            }
+
+            // Get stops and miles from stat elements
+            let stops = 0;
+            let miles = 0;
+            const statValues = doc.querySelectorAll('.stat-value');
+            if (statValues.length >= 2) {
+                stops = parseInt(statValues[0].textContent) || 0;
+                miles = parseFloat(statValues[1].textContent) || 0;
+            }
+
+            return { name, stops, miles };
+        }
+
+        async function discoverRoutes() {
+            const container = document.getElementById('routes-list');
+            const updatedEl = document.getElementById('routes-updated');
+            const routes = [];
+            const maxDrivers = 50;
+
+            // Probe for route files
+            const probePromises = [];
+            for (let i = 1; i <= maxDrivers; i++) {
+                const filename = `driver-${i}-route.html`;
+                probePromises.push(
+                    fetch(`routes/${filename}`)
+                        .then(async response => {
+                            if (response.ok) {
+                                const html = await response.text();
+                                const stats = parseRouteHtml(html);
+                                return {
+                                    num: i,
+                                    file: filename,
+                                    name: stats.name,
+                                    stops: stats.stops,
+                                    miles: stats.miles
+                                };
+                            }
+                            return null;
+                        })
+                        .catch(() => null)
+                );
+            }
+
+            const results = await Promise.all(probePromises);
+            const foundRoutes = results.filter(r => r !== null).sort((a, b) => a.num - b.num);
+
+            if (foundRoutes.length === 0) {
+                container.innerHTML = `
+                    <div class="empty-state">
+                        <div class="empty-icon">📁</div>
+                        <p>No routes available yet</p>
+                        <p class="empty-hint">Use the Route Optimizer to generate driver routes.</p>
+                    </div>
+                `;
+                return;
+            }
+
+            updatedEl.textContent = `${foundRoutes.length} route${foundRoutes.length !== 1 ? 's' : ''} found`;
+
+            const html = foundRoutes.map(route => `
+                <a href="routes/${escapeHtml(route.file)}" class="route-card">
+                    <div class="route-icon">🚗</div>
+                    <div class="route-info">
+                        <h3>${escapeHtml(route.name)}</h3>
+                        <div class="route-stats">
+                            ${route.stops ? `<span class="badge stops">${route.stops} stops</span>` : ''}
+                            ${route.miles ? `<span class="badge miles">${route.miles} mi</span>` : ''}
+                        </div>
+                    </div>
+                    <div class="route-arrow">→</div>
+                </a>
+            `).join('');
+
+            container.innerHTML = html;
+        }
+
+        document.addEventListener('DOMContentLoaded', discoverRoutes);
+    </script>
+</body>
+</html>
