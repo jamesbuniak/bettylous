@@ -98,7 +98,7 @@
         </div>
 
         <div class="card">
-            <h2><span class="step-number">2</span> Upload Your CSV</h2>
+            <h2><span class="step-number">2</span> Upload CSV</h2>
             <p>Your CSV should have these columns: <strong>Address, City, State, Zip</strong></p>
 
             <p style="font-weight: 500; margin-top: 15px; color: #333;">Input format:</p>
@@ -115,6 +115,7 @@ PO BOX 100,Center Valley,PA,18034-0100
                 <p style="color: #888; font-size: 0.9rem;">or click to browse</p>
                 <input type="file" id="fileInput" accept=".csv">
             </div>
+
             <div class="stats" id="fileStats" style="display: none;"></div>
         </div>
 
@@ -122,7 +123,15 @@ PO BOX 100,Center Valley,PA,18034-0100
             <h2><span class="step-number">3</span> Geocode & Download</h2>
             <p>Click the button below to geocode all addresses. This may take a few minutes for large files.</p>
 
-            <button class="btn btn-primary" id="geocodeBtn" disabled>Geocode Addresses</button>
+            <button class="btn btn-primary" id="geocodeBtn" disabled>Geocode All</button>
+
+            <div style="display: inline-flex; align-items: center; gap: 8px; margin-left: 15px; padding: 8px 12px; background: #f5f5f5; border-radius: 8px;">
+                <span style="font-size: 0.9rem; color: #666;">Rows</span>
+                <input type="number" id="testStart" value="1" min="1" style="width: 70px; padding: 6px 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 0.9rem;">
+                <span style="color: #888;">to</span>
+                <input type="number" id="testEnd" value="10" min="1" style="width: 70px; padding: 6px 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 0.9rem;">
+                <button class="btn btn-secondary" id="rangeBtn" disabled style="padding: 6px 12px;">Geocode Range</button>
+            </div>
 
             <div class="progress" id="progressSection" style="display: none;">
                 <div class="progress-bar">
@@ -140,13 +149,13 @@ Address,City,State,Zip,Latitude,Longitude<br>
 PO BOX 100,Center Valley,PA,18034-0100,40.5362,-75.3956
                 </div>
                 <div class="stats" id="resultStats"></div>
-                <button class="btn btn-primary" id="downloadBtn" style="margin-top: 10px;">Download data.csv</button>
+                <button class="btn btn-primary" id="downloadBtn" style="margin-top: 10px;">Download addresses.csv</button>
             </div>
         </div>
 
         <div class="card">
             <h2>Next Step</h2>
-            <p>After downloading <code>data.csv</code>, copy it into the <code>docs/</code> folder of this repository and rename it to <code>addresses.csv</code>. Then use the <a href="routeoptimizer.html">Route Optimizer</a> to generate driver routes.</p>
+            <p>After downloading, upload <code>addresses.csv</code> to the <a href="routeoptimizer.html">Route Optimizer</a> to generate driver routes.</p>
         </div>
     </div>
 
@@ -159,6 +168,9 @@ PO BOX 100,Center Valley,PA,18034-0100,40.5362,-75.3956
         var fileInput = document.getElementById('fileInput');
         var fileStats = document.getElementById('fileStats');
         var geocodeBtn = document.getElementById('geocodeBtn');
+        var rangeBtn = document.getElementById('rangeBtn');
+        var rangeStartInput = document.getElementById('testStart');
+        var rangeEndInput = document.getElementById('testEnd');
         var progressSection = document.getElementById('progressSection');
         var progressFill = document.getElementById('progressFill');
         var progressText = document.getElementById('progressText');
@@ -235,11 +247,12 @@ PO BOX 100,Center Valley,PA,18034-0100,40.5362,-75.3956
             fileStats.innerHTML = '<div class="stat success">✓ ' + rawAddresses.length.toLocaleString() + ' addresses loaded</div>';
 
             geocodeBtn.disabled = false;
+            rangeBtn.disabled = false;
             resultsSection.style.display = 'none';
         }
 
         // Geocoding
-        geocodeBtn.addEventListener('click', function() {
+        function startGeocoding(startIdx, endIdx) {
             var apiKey = apiKeyInput.value.trim();
             if (!apiKey) {
                 alert('Please enter your Google Maps API key first');
@@ -252,32 +265,78 @@ PO BOX 100,Center Valley,PA,18034-0100,40.5362,-75.3956
             }
 
             geocodeBtn.disabled = true;
+            rangeBtn.disabled = true;
             geocodeBtn.textContent = 'Geocoding...';
             progressSection.style.display = 'block';
             resultsSection.style.display = 'none';
 
-            geocodeAll(apiKey);
+            geocodeAll(apiKey, startIdx, endIdx);
+        }
+
+        // Track last geocoded range for download
+        var lastGeocodedStart = 0;
+        var lastGeocodedEnd = 0;
+        var wasRangeMode = false;
+
+        geocodeBtn.addEventListener('click', function() {
+            wasRangeMode = false;
+            startGeocoding(0, rawAddresses.length); // Process all
         });
 
-        function geocodeAll(apiKey) {
-            var total = rawAddresses.length;
-            var current = 0;
+        rangeBtn.addEventListener('click', function() {
+            var start = parseInt(rangeStartInput.value) || 1;
+            var end = parseInt(rangeEndInput.value) || 10;
+            // Convert from 1-based to 0-based index
+            start = Math.max(0, start - 1);
+            end = Math.min(rawAddresses.length, end);
+            if (start >= end) {
+                alert('Start must be less than end');
+                return;
+            }
+            wasRangeMode = true;
+            lastGeocodedStart = start;
+            lastGeocodedEnd = end;
+            startGeocoding(start, end);
+        });
+
+        function geocodeAll(apiKey, startIdx, endIdx) {
+            var total = endIdx - startIdx;
+            var current = startIdx;
             var successCount = 0;
             var failCount = 0;
+            var lastError = '';
+            var isTestMode = !(startIdx === 0 && endIdx === rawAddresses.length);
 
             function next() {
-                if (current >= total) {
+                if (current >= endIdx) {
                     // Done
-                    geocodeBtn.textContent = 'Geocode Addresses';
+                    geocodeBtn.textContent = 'Geocode All';
                     geocodeBtn.disabled = false;
+                    rangeBtn.disabled = false;
                     progressFill.style.width = '100%';
-                    progressText.textContent = 'Complete!';
+                    progressText.textContent = 'Complete!' + (isTestMode ? ' (rows ' + (startIdx + 1) + '-' + endIdx + ' of ' + rawAddresses.length + ')' : '');
 
                     resultStats.innerHTML = '<div class="stat success">✓ ' + successCount.toLocaleString() + ' geocoded</div>';
                     if (failCount > 0) {
                         resultStats.innerHTML += '<div class="stat error">✗ ' + failCount + ' failed</div>';
+                        if (lastError) {
+                            resultStats.innerHTML += '<div class="stat error" style="width:100%;margin-top:10px;">Last error: ' + lastError + '</div>';
+                            if (lastError.indexOf('REQUEST_DENIED') !== -1 || lastError.indexOf('not authorized') !== -1) {
+                                resultStats.innerHTML += '<div style="width:100%;margin-top:15px;padding:15px;background:#fff3e0;border-radius:8px;border-left:4px solid #ff9800;">' +
+                                    '<strong style="color:#e65100;">How to fix:</strong><br>' +
+                                    '1. Go to <a href="https://console.cloud.google.com/apis/library/geocoding-backend.googleapis.com" target="_blank">Google Cloud Console</a><br>' +
+                                    '2. Make sure you\'re in the correct project<br>' +
+                                    '3. Click <strong>Enable</strong> for the Geocoding API<br>' +
+                                    '4. Ensure billing is enabled on the project</div>';
+                            }
+                        }
                     }
                     resultsSection.style.display = 'block';
+
+                    // Only auto-download if we have successful results and not in test mode
+                    if (successCount > 0 && !isTestMode) {
+                        downloadBtn.click();
+                    }
                     return;
                 }
 
@@ -295,14 +354,17 @@ PO BOX 100,Center Valley,PA,18034-0100,40.5362,-75.3956
                             successCount++;
                         } else {
                             failCount++;
+                            lastError = data.status + (data.error_message ? ': ' + data.error_message : '');
+                            console.error('Geocode failed for:', addr.fullAddress, 'Status:', data.status, data.error_message || '');
                         }
                     })
                     .catch(function() { failCount++; })
                     .finally(function() {
                         current++;
-                        var pct = Math.round((current / total) * 100);
+                        var processed = current - startIdx;
+                        var pct = Math.round((processed / total) * 100);
                         progressFill.style.width = pct + '%';
-                        progressText.textContent = current.toLocaleString() + ' / ' + total.toLocaleString() + ' (' + pct + '%)';
+                        progressText.textContent = processed.toLocaleString() + ' / ' + total.toLocaleString() + ' (' + pct + '%)';
                         setTimeout(next, 50);
                     });
             }
@@ -313,7 +375,16 @@ PO BOX 100,Center Valley,PA,18034-0100,40.5362,-75.3956
         // Download
         downloadBtn.addEventListener('click', function() {
             var csv = 'Address,City,State,Zip,Latitude,Longitude\n';
-            for (var i = 0; i < rawAddresses.length; i++) {
+
+            // Determine range to export
+            var exportStart = 0;
+            var exportEnd = rawAddresses.length;
+            if (wasRangeMode) {
+                exportStart = lastGeocodedStart;
+                exportEnd = lastGeocodedEnd;
+            }
+
+            for (var i = exportStart; i < exportEnd; i++) {
                 var a = rawAddresses[i];
                 csv += '"' + (a.address || '').replace(/"/g, '""') + '",';
                 csv += '"' + (a.city || '').replace(/"/g, '""') + '",';
@@ -327,7 +398,7 @@ PO BOX 100,Center Valley,PA,18034-0100,40.5362,-75.3956
             var url = URL.createObjectURL(blob);
             var link = document.createElement('a');
             link.href = url;
-            link.download = 'data.csv';
+            link.download = 'addresses.csv';
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);

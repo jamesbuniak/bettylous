@@ -171,8 +171,16 @@
         </div>
         
         <div class="card">
-            <h2>Step 3: Upload Address List</h2>
-            <p style="color: #666; margin-bottom: 15px;">Upload a CSV with columns: Address, City, State, Zip, Latitude, Longitude. <a href="geocoder.html">Need to geocode first?</a></p>
+            <h2>Step 3: Address List</h2>
+            <p style="color: #666; margin-bottom: 15px;">Use the database addresses or upload your own geocoded CSV. <a href="geocoder.html">Need to geocode first?</a></p>
+
+            <div style="display: flex; gap: 15px; margin-bottom: 15px; flex-wrap: wrap;">
+                <button class="btn btn-primary" id="loadDatabaseBtn">Use Database Addresses</button>
+                <a href="addresses.csv" download class="btn btn-secondary" style="text-decoration: none;">Download Database CSV</a>
+            </div>
+
+            <p style="color: #888; font-size: 0.9rem; margin-bottom: 10px;">— or upload a different file —</p>
+
             <div class="drop-zone" id="dropZone">
                 <div class="icon">📄</div>
                 <p><strong>Drag & drop your CSV file here</strong></p>
@@ -180,6 +188,13 @@
                 <input type="file" id="fileInput" accept=".csv">
             </div>
             <div class="stats" id="fileStats" style="display: none;"></div>
+
+            <details style="margin-top: 15px;">
+                <summary style="cursor: pointer; color: #666; font-size: 0.9rem;">Expected CSV format</summary>
+                <pre style="background: #f5f5f5; padding: 10px; border-radius: 5px; font-size: 0.8rem; margin-top: 10px; overflow-x: auto;">Address,City,State,Zip,Latitude,Longitude
+123 Main St,Center Valley,PA,18034,40.5421,-75.3892
+456 Oak Ave,Coopersburg,PA,18036,40.5193,-75.3897</pre>
+            </details>
         </div>
         
         <div class="card">
@@ -188,6 +203,17 @@
                 <div class="form-group">
                     <label for="driverCount">Number of drivers</label>
                     <input type="number" id="driverCount" value="20" min="1" max="100" style="width: 100px;">
+                    <small style="display: block; margin-top: 3px; visibility: hidden;">.</small>
+                </div>
+                <div class="form-group">
+                    <label for="minAddresses">Min addresses/driver</label>
+                    <input type="number" id="minAddresses" value="0" min="0" style="width: 100px;">
+                    <small style="display: block; margin-top: 3px;">0 = no minimum</small>
+                </div>
+                <div class="form-group">
+                    <label for="maxAddresses">Max addresses/driver</label>
+                    <input type="number" id="maxAddresses" value="0" min="0" style="width: 100px;">
+                    <small style="display: block; margin-top: 3px;">0 = no limit</small>
                 </div>
                 <button class="btn btn-secondary" id="updateDriversBtn">Update Driver List</button>
             </div>
@@ -207,13 +233,22 @@
         
         <div class="card" id="results">
             <div class="results-header">
-                <h2>Routes Generated — Review Each Driver's Map</h2>
+                <h2>Routes Generated</h2>
                 <div class="results-actions">
-                    <button class="btn btn-success" id="downloadAllHtmlBtn">⬇ Download All HTML Files</button>
-                    <button class="btn btn-secondary" id="downloadAllTxtBtn">⬇ Download All TXT</button>
+                    <label style="display: flex; align-items: center; gap: 5px; font-size: 0.9rem; cursor: pointer; margin-right: 10px;">
+                        <input type="checkbox" id="groupByStreet"> Group by street
+                    </label>
+                    <button class="btn btn-success" id="downloadAllHtmlBtn">Download All HTML</button>
+                    <button class="btn btn-secondary" id="downloadAllTxtBtn">Download All TXT</button>
                 </div>
             </div>
             <div class="total-stats" id="totalStats"></div>
+
+            <h3 style="margin: 20px 0 10px; color: #333;">Overview Map — All Routes</h3>
+            <div id="summaryMap" style="width: 100%; height: 450px; border-radius: 10px; background: #e0e0e0; margin-bottom: 15px;"></div>
+            <div id="summaryLegend" style="display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 20px;"></div>
+
+            <h3 style="margin: 20px 0 10px; color: #333;">Individual Driver Routes</h3>
             <div id="driverResults"></div>
         </div>
     </div>
@@ -312,6 +347,7 @@
         var dropoff = { address: '', lat: 0, lng: 0 };
 
         // DOM ELEMENTS
+        var loadDatabaseBtn = document.getElementById('loadDatabaseBtn');
         var dropZone = document.getElementById('dropZone');
         var fileInput = document.getElementById('fileInput');
         var fileStats = document.getElementById('fileStats');
@@ -332,6 +368,11 @@
         var dropoffAddressInput = document.getElementById('dropoffAddress');
         var dropoffLatInput = document.getElementById('dropoffLat');
         var dropoffLngInput = document.getElementById('dropoffLng');
+        var minAddressesInput = document.getElementById('minAddresses');
+        var maxAddressesInput = document.getElementById('maxAddresses');
+        var groupByStreetCheckbox = document.getElementById('groupByStreet');
+        var summaryMapEl = document.getElementById('summaryMap');
+        var summaryLegendEl = document.getElementById('summaryLegend');
         
         // DRIVER LIST MANAGEMENT
         function updateDriverList() {
@@ -368,6 +409,39 @@
         
         updateDriversBtn.addEventListener('click', updateDriverList);
         updateDriverList();
+
+        // LOAD DATABASE ADDRESSES
+        loadDatabaseBtn.addEventListener('click', function() {
+            loadDatabaseBtn.disabled = true;
+            loadDatabaseBtn.textContent = 'Loading...';
+
+            fetch('addresses.csv')
+                .then(function(response) {
+                    if (!response.ok) throw new Error('Could not load addresses.csv');
+                    return response.text();
+                })
+                .then(function(csvText) {
+                    Papa.parse(csvText, {
+                        header: true,
+                        skipEmptyLines: true,
+                        complete: function(result) {
+                            loadedFileName = 'addresses.csv (database)';
+                            processCSV(result.data);
+                            loadDatabaseBtn.textContent = '✓ Loaded';
+                        },
+                        error: function(error) {
+                            alert('Error parsing CSV: ' + error.message);
+                            loadDatabaseBtn.disabled = false;
+                            loadDatabaseBtn.textContent = 'Use Database Addresses';
+                        }
+                    });
+                })
+                .catch(function(error) {
+                    alert('Error loading database: ' + error.message);
+                    loadDatabaseBtn.disabled = false;
+                    loadDatabaseBtn.textContent = 'Use Database Addresses';
+                });
+        });
 
         // FILE UPLOAD
         dropZone.addEventListener('click', function() { fileInput.click(); });
@@ -488,20 +562,23 @@
             progressFill.style.width = '0%';
             progressText.textContent = 'Clustering addresses...';
             driverMaps = {};
-            
+
+            var minPerDriver = parseInt(minAddressesInput.value) || 0;
+            var maxPerDriver = parseInt(maxAddressesInput.value) || 0;
+
             setTimeout(function() {
                 var numDrivers = drivers.length;
                 var points = [];
                 for (var i = 0; i < addresses.length; i++) {
                     points.push([addresses[i].lat, addresses[i].lng]);
                 }
-                
+
                 progressFill.style.width = '30%';
                 var result = kmeans(points, numDrivers, 100);
-                
+
                 progressFill.style.width = '50%';
-                progressText.textContent = 'Ordering routes...';
-                
+                progressText.textContent = 'Balancing routes...';
+
                 setTimeout(function() {
                     // Assign addresses to clusters
                     clusters = [];
@@ -509,40 +586,164 @@
                     for (var i = 0; i < result.clusters.length; i++) {
                         clusters[result.clusters[i]].push(addresses[i]);
                     }
-                    
-                    // Order each cluster to end at dropoff
-                    for (var i = 0; i < clusters.length; i++) {
-                        clusters[i] = orderClusterToDropoff(clusters[i]);
+
+                    // Apply min/max balancing if constraints are set
+                    if (minPerDriver > 0 || maxPerDriver > 0) {
+                        clusters = balanceClusters(clusters, minPerDriver, maxPerDriver);
                     }
-                    
-                    progressFill.style.width = '90%';
-                    progressText.textContent = 'Calculating distances...';
-                    
+
+                    progressFill.style.width = '70%';
+                    progressText.textContent = 'Ordering routes...';
+
                     setTimeout(function() {
-                        // Calculate mileage for each cluster
+                        // Order each cluster to end at dropoff
                         for (var i = 0; i < clusters.length; i++) {
-                            calculateClusterMileage(clusters[i]);
+                            clusters[i] = orderClusterToDropoff(clusters[i]);
                         }
-                        
-                        renderResults();
-                        
-                        progressFill.style.width = '100%';
-                        progressText.textContent = 'Complete!';
-                        
+
+                        progressFill.style.width = '90%';
+                        progressText.textContent = 'Calculating distances...';
+
                         setTimeout(function() {
-                            progress.style.display = 'none';
-                            generateBtn.disabled = false;
-                            // Init first driver map - wait for DOM to fully stabilize
+                            // Calculate mileage for each cluster
+                            for (var i = 0; i < clusters.length; i++) {
+                                calculateClusterMileage(clusters[i]);
+                            }
+
+                            renderResults();
+
+                            progressFill.style.width = '100%';
+                            progressText.textContent = 'Complete!';
+
                             setTimeout(function() {
-                                var firstCard = document.querySelector('.driver-card .driver-content.open');
-                                if (firstCard) {
-                                    initSingleDriverMap(0);
-                                }
-                            }, 500);
-                        }, 300);
+                                progress.style.display = 'none';
+                                generateBtn.disabled = false;
+                                // Init summary map and first driver map - wait for DOM to fully stabilize
+                                setTimeout(function() {
+                                    initSummaryMap();
+                                    var firstCard = document.querySelector('.driver-card .driver-content.open');
+                                    if (firstCard) {
+                                        initSingleDriverMap(0);
+                                    }
+                                }, 500);
+                            }, 300);
+                        }, 50);
                     }, 50);
                 }, 50);
             }, 50);
+        }
+
+        // Balance clusters to respect min/max constraints
+        function balanceClusters(clusterArr, minPerDriver, maxPerDriver) {
+            var numClusters = clusterArr.length;
+
+            // If max is set and some clusters exceed it, redistribute
+            if (maxPerDriver > 0) {
+                var overflow = [];
+                for (var i = 0; i < numClusters; i++) {
+                    while (clusterArr[i].length > maxPerDriver) {
+                        // Remove furthest address from centroid and add to overflow
+                        var centroid = calculateCentroid(clusterArr[i]);
+                        var furthestIdx = 0;
+                        var furthestDist = 0;
+                        for (var j = 0; j < clusterArr[i].length; j++) {
+                            var d = haversine(clusterArr[i][j].lat, clusterArr[i][j].lng, centroid.lat, centroid.lng);
+                            if (d > furthestDist) {
+                                furthestDist = d;
+                                furthestIdx = j;
+                            }
+                        }
+                        overflow.push(clusterArr[i].splice(furthestIdx, 1)[0]);
+                    }
+                }
+
+                // Redistribute overflow to clusters that have room
+                for (var o = 0; o < overflow.length; o++) {
+                    var addr = overflow[o];
+                    var bestCluster = -1;
+                    var bestDist = Infinity;
+
+                    for (var i = 0; i < numClusters; i++) {
+                        if (maxPerDriver === 0 || clusterArr[i].length < maxPerDriver) {
+                            var centroid = calculateCentroid(clusterArr[i]);
+                            var d = haversine(addr.lat, addr.lng, centroid.lat, centroid.lng);
+                            if (d < bestDist) {
+                                bestDist = d;
+                                bestCluster = i;
+                            }
+                        }
+                    }
+
+                    if (bestCluster >= 0) {
+                        clusterArr[bestCluster].push(addr);
+                    } else {
+                        // All clusters full, add to smallest one anyway
+                        var smallestIdx = 0;
+                        for (var i = 1; i < numClusters; i++) {
+                            if (clusterArr[i].length < clusterArr[smallestIdx].length) {
+                                smallestIdx = i;
+                            }
+                        }
+                        clusterArr[smallestIdx].push(addr);
+                    }
+                }
+            }
+
+            // If min is set, try to move addresses from large clusters to small ones
+            if (minPerDriver > 0) {
+                var changed = true;
+                var iterations = 0;
+                while (changed && iterations < 50) {
+                    changed = false;
+                    iterations++;
+
+                    for (var i = 0; i < numClusters; i++) {
+                        if (clusterArr[i].length < minPerDriver) {
+                            // Find a donor cluster (one that has more than min + 1)
+                            var donorIdx = -1;
+                            var donorSize = 0;
+                            for (var j = 0; j < numClusters; j++) {
+                                if (i !== j && clusterArr[j].length > minPerDriver) {
+                                    if (clusterArr[j].length > donorSize) {
+                                        donorSize = clusterArr[j].length;
+                                        donorIdx = j;
+                                    }
+                                }
+                            }
+
+                            if (donorIdx >= 0) {
+                                // Move the nearest address from donor to this cluster
+                                var targetCentroid = clusterArr[i].length > 0 ? calculateCentroid(clusterArr[i]) : { lat: dropoff.lat, lng: dropoff.lng };
+                                var nearestIdx = 0;
+                                var nearestDist = Infinity;
+
+                                for (var k = 0; k < clusterArr[donorIdx].length; k++) {
+                                    var d = haversine(clusterArr[donorIdx][k].lat, clusterArr[donorIdx][k].lng, targetCentroid.lat, targetCentroid.lng);
+                                    if (d < nearestDist) {
+                                        nearestDist = d;
+                                        nearestIdx = k;
+                                    }
+                                }
+
+                                clusterArr[i].push(clusterArr[donorIdx].splice(nearestIdx, 1)[0]);
+                                changed = true;
+                            }
+                        }
+                    }
+                }
+            }
+
+            return clusterArr;
+        }
+
+        function calculateCentroid(cluster) {
+            if (cluster.length === 0) return { lat: 0, lng: 0 };
+            var sumLat = 0, sumLng = 0;
+            for (var i = 0; i < cluster.length; i++) {
+                sumLat += cluster[i].lat;
+                sumLng += cluster[i].lng;
+            }
+            return { lat: sumLat / cluster.length, lng: sumLng / cluster.length };
         }
         
         function orderClusterToDropoff(cluster) {
@@ -638,14 +839,13 @@
                     totalMiles += dist;
                 }
             }
-            // Add distance from last stop to dropoff
+            // Store total miles (pickup stops only, NOT including return to dropoff)
+            cluster.totalMiles = totalMiles;
+            // Store distance to dropoff separately for reference
             if (cluster.length > 0) {
                 var last = cluster[cluster.length - 1];
-                var toDropoff = haversine(last.lat, last.lng, dropoff.lat, dropoff.lng);
-                cluster.totalMiles = totalMiles + toDropoff;
-                cluster.milesToDropoff = toDropoff;
+                cluster.milesToDropoff = haversine(last.lat, last.lng, dropoff.lat, dropoff.lng);
             } else {
-                cluster.totalMiles = 0;
                 cluster.milesToDropoff = 0;
             }
         }
@@ -688,11 +888,15 @@
                     card.className = 'driver-card';
 
                     var milesStr = (cluster.totalMiles || 0).toFixed(1);
+                    // Estimate drive time
+                    var estMins = Math.round(cluster.length * 2 + parseFloat(milesStr) * 2);
+                    var estTimeStr = estMins >= 60 ? Math.floor(estMins / 60) + 'h ' + (estMins % 60) + 'm' : estMins + ' min';
 
                     var headerHtml = '<div class="driver-header" data-index="' + i + '">';
                     headerHtml += '<h3>' + escapeHtml(driver.name);
                     headerHtml += ' <span class="badge count">' + cluster.length + ' stops</span>';
                     headerHtml += ' <span class="badge miles">' + milesStr + ' mi</span>';
+                    headerHtml += ' <span class="badge" style="background:#9C27B0;color:white;">~' + estTimeStr + '</span>';
                     headerHtml += '</h3>';
                     headerHtml += '<div class="driver-actions">';
                     headerHtml += '<button class="btn btn-secondary btn-small" data-action="html" data-index="' + i + '">📄 HTML</button>';
@@ -896,7 +1100,159 @@
             
             driverMaps[driverIndex] = map;
         }
-        
+
+        // Color palette for routes
+        var routeColors = [
+            '#E87C1E', '#2196F3', '#4CAF50', '#9C27B0', '#F44336',
+            '#00BCD4', '#FF9800', '#673AB7', '#009688', '#E91E63',
+            '#3F51B5', '#8BC34A', '#FF5722', '#795548', '#607D8B',
+            '#CDDC39', '#FFC107', '#03A9F4', '#9E9E9E', '#00E676'
+        ];
+
+        var summaryMap = null;
+        var summaryPolylines = [];
+        var summaryMarkers = [];
+
+        function initSummaryMap() {
+            if (!window.google || !window.google.maps) return;
+            if (!summaryMapEl) return;
+
+            // Clear previous
+            summaryPolylines = [];
+            summaryMarkers = [];
+
+            var bounds = new google.maps.LatLngBounds();
+
+            // Add all addresses to bounds
+            for (var i = 0; i < clusters.length; i++) {
+                for (var j = 0; j < clusters[i].length; j++) {
+                    bounds.extend({ lat: clusters[i][j].lat, lng: clusters[i][j].lng });
+                }
+            }
+            bounds.extend({ lat: dropoff.lat, lng: dropoff.lng });
+
+            summaryMap = new google.maps.Map(summaryMapEl, {
+                center: bounds.getCenter(),
+                zoom: 12
+            });
+            summaryMap.fitBounds(bounds);
+
+            // Draw each driver's route with a different color
+            for (var i = 0; i < clusters.length; i++) {
+                var cluster = clusters[i];
+                if (cluster.length === 0) continue;
+
+                var color = routeColors[i % routeColors.length];
+
+                // Draw route line
+                var path = [];
+                for (var j = 0; j < cluster.length; j++) {
+                    path.push({ lat: cluster[j].lat, lng: cluster[j].lng });
+                }
+                path.push({ lat: dropoff.lat, lng: dropoff.lng });
+
+                var polyline = new google.maps.Polyline({
+                    path: path,
+                    geodesic: true,
+                    strokeColor: color,
+                    strokeOpacity: 0.8,
+                    strokeWeight: 3,
+                    map: summaryMap
+                });
+                summaryPolylines.push({ line: polyline, driverIndex: i });
+
+                // Add start marker for each route
+                if (cluster.length > 0) {
+                    var marker = new google.maps.Marker({
+                        position: { lat: cluster[0].lat, lng: cluster[0].lng },
+                        map: summaryMap,
+                        label: { text: String(i + 1), color: 'white', fontSize: '10px', fontWeight: 'bold' },
+                        icon: {
+                            path: google.maps.SymbolPath.CIRCLE,
+                            fillColor: color,
+                            fillOpacity: 1,
+                            strokeWeight: 2,
+                            strokeColor: 'white',
+                            scale: 12
+                        },
+                        title: drivers[i].name + ' - ' + cluster.length + ' stops'
+                    });
+                    summaryMarkers.push({ marker: marker, driverIndex: i });
+                }
+            }
+
+            // Add dropoff marker
+            new google.maps.Marker({
+                position: { lat: dropoff.lat, lng: dropoff.lng },
+                map: summaryMap,
+                label: { text: '🏁', fontSize: '16px' },
+                title: 'DROP-OFF: ' + dropoff.address
+            });
+
+            // Build legend
+            buildSummaryLegend();
+        }
+
+        function buildSummaryLegend() {
+            if (!summaryLegendEl) return;
+
+            var html = '';
+            for (var i = 0; i < clusters.length; i++) {
+                if (clusters[i].length === 0) continue;
+                var color = routeColors[i % routeColors.length];
+                html += '<div class="legend-item" data-driver="' + i + '" style="display:flex;align-items:center;gap:6px;padding:6px 12px;background:#f5f5f5;border-radius:6px;cursor:pointer;border:2px solid transparent;transition:all 0.2s;">';
+                html += '<span style="width:14px;height:14px;border-radius:50%;background:' + color + ';"></span>';
+                html += '<span style="font-size:0.85rem;">' + escapeHtml(drivers[i].name) + ' (' + clusters[i].length + ')</span>';
+                html += '</div>';
+            }
+            summaryLegendEl.innerHTML = html;
+
+            // Add click handlers for legend items
+            var legendItems = summaryLegendEl.querySelectorAll('.legend-item');
+            for (var l = 0; l < legendItems.length; l++) {
+                legendItems[l].addEventListener('click', function() {
+                    var driverIdx = parseInt(this.getAttribute('data-driver'));
+                    highlightRoute(driverIdx, this);
+                });
+            }
+        }
+
+        function highlightRoute(driverIndex, legendEl) {
+            // Reset all routes
+            for (var i = 0; i < summaryPolylines.length; i++) {
+                var isHighlighted = summaryPolylines[i].driverIndex === driverIndex;
+                summaryPolylines[i].line.setOptions({
+                    strokeOpacity: isHighlighted ? 1 : 0.3,
+                    strokeWeight: isHighlighted ? 5 : 2
+                });
+            }
+
+            // Reset all markers
+            for (var i = 0; i < summaryMarkers.length; i++) {
+                var isHighlighted = summaryMarkers[i].driverIndex === driverIndex;
+                summaryMarkers[i].marker.setOpacity(isHighlighted ? 1 : 0.5);
+            }
+
+            // Update legend styling
+            var allLegendItems = summaryLegendEl.querySelectorAll('.legend-item');
+            for (var i = 0; i < allLegendItems.length; i++) {
+                var idx = parseInt(allLegendItems[i].getAttribute('data-driver'));
+                if (idx === driverIndex) {
+                    allLegendItems[i].style.borderColor = routeColors[idx % routeColors.length];
+                    allLegendItems[i].style.background = '#fff';
+                } else {
+                    allLegendItems[i].style.borderColor = 'transparent';
+                    allLegendItems[i].style.background = '#f5f5f5';
+                }
+            }
+
+            // Scroll to driver card
+            var driverCard = document.querySelector('.driver-header[data-index="' + driverIndex + '"]');
+            if (driverCard) {
+                driverCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+        }
+
         function getMapsLink(addr) {
             return 'https://www.google.com/maps/search/?api=1&query=' + addr.lat + ',' + addr.lng;
         }
@@ -922,21 +1278,76 @@
             return text;
         }
         
+        // Extract street name from address (removes house number)
+        function getStreetName(address) {
+            if (!address) return '';
+            // Remove leading house number and return street name
+            var street = address.replace(/^\d+[\s-]*/, '').trim();
+            // Also handle things like "PO BOX 123" -> "PO BOX"
+            if (address.toUpperCase().startsWith('PO BOX')) {
+                return 'PO BOX';
+            }
+            return street || address;
+        }
+
         function generateDriverHtml(index) {
             var cluster = clusters[index];
             var driver = drivers[index];
             var apiKey = apiKeyInput.value.trim();
             var miles = (cluster.totalMiles || 0).toFixed(1);
-            
+            var groupByStreet = groupByStreetCheckbox && groupByStreetCheckbox.checked;
+
             var addressListHtml = '';
-            for (var j = 0; j < cluster.length; j++) {
-                var addr = cluster[j];
-                addressListHtml += '<div style="display:flex;align-items:center;padding:12px 0;border-bottom:1px solid #eee;">';
-                addressListHtml += '<span style="min-width:40px;color:#E87C1E;font-weight:600;">' + (j + 1) + '.</span>';
-                addressListHtml += '<span style="flex:1;">' + escapeHtml(addr.fullAddress) + '</span>';
-                addressListHtml += '<a href="' + getMapsLink(addr) + '" target="_blank" style="margin-left:10px;color:#E87C1E;text-decoration:none;padding:5px 10px;background:#fff8f0;border-radius:5px;">Navigate ↗</a>';
-                addressListHtml += '</div>';
+
+            // Street View Static API URL helper
+            function getStreetViewUrl(lat, lng, apiKey) {
+                return 'https://maps.googleapis.com/maps/api/streetview?size=80x60&location=' + lat + ',' + lng + '&key=' + apiKey;
             }
+
+            if (groupByStreet && cluster.length > 0) {
+                // Group consecutive addresses by street
+                var currentStreet = '';
+                var streetCount = 0;
+
+                for (var j = 0; j < cluster.length; j++) {
+                    var addr = cluster[j];
+                    var streetName = getStreetName(addr.address);
+
+                    if (streetName !== currentStreet) {
+                        // New street header
+                        currentStreet = streetName;
+                        streetCount++;
+                        addressListHtml += '<div style="background:#f5f5f5;padding:10px 15px;margin:15px 0 5px 0;border-radius:8px;border-left:4px solid #E87C1E;">';
+                        addressListHtml += '<strong style="color:#333;">' + escapeHtml(currentStreet) + '</strong>';
+                        addressListHtml += '</div>';
+                    }
+
+                    addressListHtml += '<div class="address-item" style="display:flex;align-items:center;padding:12px 0;border-bottom:1px solid #eee;margin-left:15px;gap:10px;">';
+                    addressListHtml += '<input type="checkbox" class="print-check">';
+                    if (apiKey) {
+                        addressListHtml += '<img src="' + getStreetViewUrl(addr.lat, addr.lng, apiKey) + '" style="width:80px;height:60px;border-radius:4px;object-fit:cover;" loading="lazy" alt="Street view">';
+                    }
+                    addressListHtml += '<span style="min-width:40px;color:#E87C1E;font-weight:600;">' + (j + 1) + '.</span>';
+                    addressListHtml += '<span style="flex:1;">' + escapeHtml(addr.fullAddress) + '</span>';
+                    addressListHtml += '<a href="' + getMapsLink(addr) + '" target="_blank" style="margin-left:10px;color:#E87C1E;text-decoration:none;padding:5px 10px;background:#fff8f0;border-radius:5px;">Navigate ↗</a>';
+                    addressListHtml += '</div>';
+                }
+            } else {
+                // Standard list without grouping
+                for (var j = 0; j < cluster.length; j++) {
+                    var addr = cluster[j];
+                    addressListHtml += '<div class="address-item" style="display:flex;align-items:center;padding:12px 0;border-bottom:1px solid #eee;gap:10px;">';
+                    addressListHtml += '<input type="checkbox" class="print-check">';
+                    if (apiKey) {
+                        addressListHtml += '<img src="' + getStreetViewUrl(addr.lat, addr.lng, apiKey) + '" style="width:80px;height:60px;border-radius:4px;object-fit:cover;" loading="lazy" alt="Street view">';
+                    }
+                    addressListHtml += '<span style="min-width:40px;color:#E87C1E;font-weight:600;">' + (j + 1) + '.</span>';
+                    addressListHtml += '<span style="flex:1;">' + escapeHtml(addr.fullAddress) + '</span>';
+                    addressListHtml += '<a href="' + getMapsLink(addr) + '" target="_blank" style="margin-left:10px;color:#E87C1E;text-decoration:none;padding:5px 10px;background:#fff8f0;border-radius:5px;">Navigate ↗</a>';
+                    addressListHtml += '</div>';
+                }
+            }
+
             // Dropoff
             addressListHtml += '<div style="display:flex;align-items:center;padding:12px;background:#e8f5e9;border-radius:5px;margin-top:10px;">';
             addressListHtml += '<span style="min-width:40px;color:#2e7d32;font-weight:600;">END</span>';
@@ -971,6 +1382,8 @@
             boundsJs += 'bounds.extend({lat:' + dropoff.lat + ',lng:' + dropoff.lng + '});\n';
             boundsJs += 'map.fitBounds(bounds);\n';
             
+            var generatedTime = new Date().toLocaleString();
+
             var html = '<!DOCTYPE html><html lang="en"><head>';
             html += '<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">';
             html += '<title>' + escapeHtml(driver.name) + ' - Betty Lou\'s Pantry Route</title>';
@@ -980,20 +1393,49 @@
             html += '.stats{display:flex;justify-content:center;gap:30px;padding:15px;background:rgba(0,0,0,0.1);margin-top:15px;border-radius:10px}';
             html += '.stat{text-align:center}.stat-value{font-size:1.5rem;font-weight:700}.stat-label{font-size:0.85rem;opacity:0.9}';
             html += '#map{width:100%;height:450px}.container{max-width:800px;margin:0 auto;padding:20px}';
-            html += '.card{background:white;border-radius:12px;padding:20px;margin-top:20px;box-shadow:0 2px 10px rgba(0,0,0,0.1)}.card h2{margin-bottom:15px;color:#333}</style></head><body>';
+            html += '.card{background:white;border-radius:12px;padding:20px;margin-top:20px;box-shadow:0 2px 10px rgba(0,0,0,0.1)}.card h2{margin-bottom:15px;color:#333}';
+            html += '.print-btn{display:inline-block;padding:10px 20px;background:#E87C1E;color:white;border:none;border-radius:6px;font-size:1rem;cursor:pointer;margin-top:15px}';
+            html += '.print-btn:hover{background:#C4650F}';
+            html += '.print-check{width:20px;height:20px;margin-right:10px;vertical-align:middle}';
+            html += '.meta{text-align:center;padding:15px;color:#888;font-size:0.85rem}';
+            // Print styles
+            html += '@media print{';
+            html += '#map,.print-btn{display:none!important}';
+            html += 'body{background:white}';
+            html += '.header{background:#E87C1E!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}';
+            html += '.card{box-shadow:none;border:1px solid #ddd}';
+            html += '.container{max-width:100%;padding:10px}';
+            html += 'a{color:#333!important;text-decoration:none!important;background:none!important;padding:0!important}';
+            html += '.address-item{page-break-inside:avoid}';
+            html += '.address-item img{display:none!important}';
+            html += '.print-check{display:inline-block!important}';
+            html += '}';
+            html += '@media screen{.print-check{display:none}}';
+            html += '</style></head><body>';
+            // Estimate drive time: ~2 min per stop + ~2 min per mile (suburban driving with stops)
+            var estimatedMinutes = Math.round(cluster.length * 2 + parseFloat(miles) * 2);
+            var hours = Math.floor(estimatedMinutes / 60);
+            var mins = estimatedMinutes % 60;
+            var timeStr = hours > 0 ? hours + 'h ' + mins + 'm' : mins + ' min';
+
             html += '<div class="header"><h1>🍞 ' + escapeHtml(driver.name) + '</h1>';
             html += '<p>Betty Lou\'s Pantry — Letter Carrier Food Drive</p>';
             html += '<div class="stats"><div class="stat"><div class="stat-value">' + cluster.length + '</div><div class="stat-label">Stops</div></div>';
-            html += '<div class="stat"><div class="stat-value">' + miles + '</div><div class="stat-label">Miles</div></div></div></div>';
+            html += '<div class="stat"><div class="stat-value">' + miles + '</div><div class="stat-label">Miles</div></div>';
+            html += '<div class="stat"><div class="stat-value">~' + timeStr + '</div><div class="stat-label">Est. Time</div></div></div></div>';
             html += '<div id="map"></div>';
-            html += '<div class="container"><div class="card"><h2>Route Addresses</h2>' + addressListHtml + '</div></div>';
-            
+            html += '<div class="container"><div class="card"><h2>Route Addresses</h2>';
+            html += '<button class="print-btn" onclick="window.print()">🖨️ Print Route</button>';
+            html += addressListHtml + '</div>';
+            html += '<div class="meta">Generated: ' + escapeHtml(generatedTime) + ' | Betty Lou\'s Pantry Route Optimizer</div>';
+            html += '</div>';
+
             if (apiKey) {
                 html += '<script src="https://maps.googleapis.com/maps/api/js?key=' + apiKey + '&callback=initMap" async defer><\/script>';
                 html += '<script>function initMap(){var map=new google.maps.Map(document.getElementById("map"),{center:{lat:' + (cluster[0]?.lat || dropoff.lat) + ',lng:' + (cluster[0]?.lng || dropoff.lng) + '},zoom:13});';
                 html += markersJs + pathJs + boundsJs + '}<\/script>';
             }
-            
+
             html += '</body></html>';
             return html;
         }
