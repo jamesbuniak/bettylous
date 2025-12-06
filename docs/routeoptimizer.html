@@ -564,7 +564,11 @@
                             setTimeout(function() {
                                 // Step 4: Order addresses within each driver's route
                                 for (var i = 0; i < clusters.length; i++) {
+                                    var savedBucketWork = clusters[i].bucketWork;  // Save before reordering
                                     clusters[i] = orderClusterToDropoff(clusters[i]);
+                                    if (savedBucketWork !== undefined) {
+                                        clusters[i].bucketWork = savedBucketWork;  // Restore after reordering
+                                    }
                                 }
 
                                 progressFill.style.width = '80%';
@@ -591,20 +595,32 @@
                                     balanceLog.push('');
                                     balanceLog.push('=== ACTUAL FINAL WORK ===');
                                     var actualMin = Infinity, actualMax = -1, actualTotal = 0;
+                                    var bucketMin = Infinity, bucketMax = -1, bucketTotal = 0;
                                     for (var i = 0; i < clusters.length; i++) {
                                         var stops = clusters[i].length;
                                         var miles = clusters[i].totalMiles || 0;
                                         var work = Math.round(stops * miles);
+                                        var bucketWork = clusters[i].bucketWork ? Math.round(clusters[i].bucketWork) : 'N/A';
                                         actualTotal += work;
                                         if (work < actualMin) actualMin = work;
                                         if (work > actualMax) actualMax = work;
+                                        if (typeof bucketWork === 'number') {
+                                            bucketTotal += bucketWork;
+                                            if (bucketWork < bucketMin) bucketMin = bucketWork;
+                                            if (bucketWork > bucketMax) bucketMax = bucketWork;
+                                        }
                                         balanceLog.push('Driver ' + (i + 1) + ': ' + stops + ' stops, ' +
-                                            miles.toFixed(1) + ' mi, work=' + work);
+                                            miles.toFixed(1) + ' mi, routeWork=' + work + ', bucketWork=' + bucketWork);
                                     }
                                     var actualAvg = actualTotal / clusters.length;
+                                    var bucketAvg = bucketTotal / clusters.length;
                                     balanceLog.push('');
-                                    balanceLog.push('ACTUAL SUMMARY: min=' + Math.round(actualMin) + ', max=' + Math.round(actualMax) +
+                                    balanceLog.push('ROUTE WORK (stops×routeMiles): min=' + Math.round(actualMin) + ', max=' + Math.round(actualMax) +
                                         ', avg=' + Math.round(actualAvg) + ', spread=' + ((actualMax - actualMin) / actualAvg * 100).toFixed(1) + '%');
+                                    if (bucketMin !== Infinity) {
+                                        balanceLog.push('BUCKET WORK (stops×internalMiles): min=' + Math.round(bucketMin) + ', max=' + Math.round(bucketMax) +
+                                            ', avg=' + Math.round(bucketAvg) + ', spread=' + ((bucketMax - bucketMin) / bucketAvg * 100).toFixed(1) + '%');
+                                    }
 
                                     renderResults();
 
@@ -1619,6 +1635,12 @@
             var globalCenter = calcCenterOfMass(allAddresses);
             balanceLog.push('Global center of mass: ' + globalCenter.lat.toFixed(4) + ', ' + globalCenter.lng.toFixed(4));
             balanceLog.push('Total work: ' + Math.round(totalSectionWork));
+            balanceLog.push('Work quota per driver: ' + Math.round(totalSectionWork / numDrivers));
+            balanceLog.push('');
+            balanceLog.push('Section work values:');
+            for (var s = 0; s < sectionData.length; s++) {
+                balanceLog.push('  Section ' + s + ': ' + sectionData[s].cluster.length + ' addr, work=' + Math.round(sectionData[s].work));
+            }
             balanceLog.push('');
 
             // Track remaining work and drivers for dynamic quota
@@ -1661,8 +1683,25 @@
                 bucket.work = sectionData[furthestIdx].work;
                 bucket.center = sectionData[furthestIdx].center;
 
-                // Fill with CLOSEST unused sections until work quota met, then STOP
-                while (bucket.work < workQuota) {
+                balanceLog.push('  Start: section ' + furthestIdx + ' (' + sectionData[furthestIdx].cluster.length + ' addr, work=' + Math.round(bucket.work) + '), fill=' + ((bucket.work / workQuota) * 100).toFixed(1) + '%');
+
+                // Fill with CLOSEST unused sections until work quota met
+                var isLastDriver = (d === numDrivers - 1);
+                var loopCount = 0;
+                while (true) {
+                    loopCount++;
+                    if (loopCount > 500) {
+                        balanceLog.push('  *** BREAK: infinite loop protection ***');
+                        break;
+                    }
+
+                    // If bucket is within 95-105% of quota, we're done (unless last driver)
+                    var fillPercent = (bucket.work / workQuota) * 100;
+                    if (!isLastDriver && fillPercent >= 95 && fillPercent <= 105) {
+                        balanceLog.push('  Done: fill=' + fillPercent.toFixed(1) + '% (in 95-105% range)');
+                        break;
+                    }
+
                     // Find closest unused section to bucket's center
                     var closestIdx = -1;
                     var closestDist = Infinity;
@@ -1677,15 +1716,73 @@
                         }
                     }
 
-                    if (closestIdx === -1) break;  // No more sections available
-
-                    // Add this section to bucket
-                    sectionData[closestIdx].used = true;
-                    bucket.sections.push(closestIdx);
-                    for (var i = 0; i < sectionData[closestIdx].cluster.length; i++) {
-                        bucket.addresses.push(sectionData[closestIdx].cluster[i]);
+                    if (closestIdx === -1) {
+                        balanceLog.push('  No more sections available, fill=' + fillPercent.toFixed(1) + '%');
+                        break;  // No more sections available
                     }
-                    bucket.work += sectionData[closestIdx].work;
+
+                    var section = sectionData[closestIdx];
+                    var newWork = bucket.work + section.work;
+                    var newFillPercent = (newWork / workQuota) * 100;
+
+                    balanceLog.push('  Consider section ' + closestIdx + ': ' + section.cluster.length + ' addr, work=' + Math.round(section.work) + ', would be ' + newFillPercent.toFixed(1) + '%');
+
+                    // Would adding this section exceed 105%? (Last driver takes everything)
+                    if (!isLastDriver && newFillPercent > 105) {
+                        // SPLIT the section: take only enough addresses to reach 100%
+                        var workNeeded = workQuota - bucket.work;
+                        var workPerAddress = section.work / section.cluster.length;
+                        var addressesToTake = Math.floor(workNeeded / workPerAddress);
+
+                        balanceLog.push('    >105% - need split: workNeeded=' + Math.round(workNeeded) + ', workPerAddr=' + workPerAddress.toFixed(2) + ', addressesToTake=' + addressesToTake);
+
+                        // Ensure we take at least 1 address if we need work
+                        if (addressesToTake <= 0 && bucket.work < workQuota * 0.95) {
+                            balanceLog.push('    addressesToTake was 0 but under 95%, forcing to 1');
+                            addressesToTake = 1;
+                        }
+
+                        if (addressesToTake > 0 && addressesToTake < section.cluster.length) {
+                            // Take partial section
+                            var taken = section.cluster.splice(0, addressesToTake);
+                            for (var i = 0; i < taken.length; i++) {
+                                bucket.addresses.push(taken[i]);
+                            }
+
+                            // Use proportional work (don't recalculate - keeps values consistent)
+                            var workTaken = addressesToTake * workPerAddress;
+                            bucket.work += workTaken;
+                            section.work -= workTaken;
+
+                            // Recalculate section center with remaining addresses
+                            section.center = calcCenterOfMass(section.cluster);
+
+                            balanceLog.push('    Split section: took ' + addressesToTake + ' addresses, left ' + section.cluster.length + ', bucket work now=' + Math.round(bucket.work));
+                        } else if (addressesToTake >= section.cluster.length) {
+                            // Take the whole section (it's smaller than or equal to what we need)
+                            section.used = true;
+                            bucket.sections.push(closestIdx);
+                            for (var i = 0; i < section.cluster.length; i++) {
+                                bucket.addresses.push(section.cluster[i]);
+                            }
+                            bucket.work += section.work;
+                            bucket.center = calcCenterOfMass(bucket.addresses);
+                            balanceLog.push('    Took full section: ' + section.cluster.length + ' addresses, work now=' + Math.round(bucket.work));
+                            continue;  // Keep filling this bucket
+                        } else {
+                            balanceLog.push('    Cannot split (addressesToTake=' + addressesToTake + '), stopping bucket fill at ' + ((bucket.work / workQuota) * 100).toFixed(1) + '%');
+                        }
+                        break;  // Bucket is now at ~100%
+                    }
+
+                    // Section fits within tolerance - add whole section
+                    section.used = true;
+                    bucket.sections.push(closestIdx);
+                    for (var i = 0; i < section.cluster.length; i++) {
+                        bucket.addresses.push(section.cluster[i]);
+                    }
+                    bucket.work += section.work;
+                    balanceLog.push('    Added section ' + closestIdx + ', bucket work now=' + Math.round(bucket.work) + ' (' + ((bucket.work / workQuota) * 100).toFixed(1) + '%)');
 
                     // Recalculate bucket center of mass
                     bucket.center = calcCenterOfMass(bucket.addresses);
@@ -1735,10 +1832,12 @@
             balanceLog.push('');
             balanceLog.push('Created ' + buckets.length + ' buckets from ' + finalClusters.length + ' sections');
 
-            // Convert buckets to finalClusters for display
+            // Convert buckets to finalClusters for display (preserve bucket work)
             finalClusters = [];
             for (var b = 0; b < buckets.length; b++) {
-                finalClusters.push(buckets[b].addresses);
+                var cluster = buckets[b].addresses;
+                cluster.bucketWork = buckets[b].work;  // Preserve the calculated work
+                finalClusters.push(cluster);
             }
 
             // Log final bucket stats
@@ -3507,7 +3606,7 @@
                 if (clusters[i].length === 0) continue;
                 var color = routeColors[i % routeColors.length];
                 var miles = (clusters[i].totalMiles || 0).toFixed(1);
-                var workScore = Math.round(clusters[i].length * parseFloat(miles));
+                var workScore = clusters[i].bucketWork ? Math.round(clusters[i].bucketWork) : Math.round(clusters[i].length * parseFloat(miles));
                 html += '<div class="legend-item" data-driver="' + i + '" style="display:flex;align-items:center;gap:6px;padding:6px 12px;background:#f5f5f5;border-radius:6px;cursor:pointer;border:2px solid transparent;transition:all 0.2s;">';
                 html += '<span style="width:14px;height:14px;border-radius:50%;background:' + color + ';flex-shrink:0;"></span>';
                 html += '<span style="font-size:0.85rem;white-space:nowrap;">' + escapeHtml(drivers[i].name) + '</span>';
