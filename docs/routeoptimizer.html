@@ -3324,8 +3324,10 @@
                     var card = document.createElement('div');
                     card.className = 'driver-card';
 
+                    // Use same calculations as overview legend
                     var milesStr = (cluster.totalMiles || 0).toFixed(1);
-                    // Estimate drive time
+                    var workScore = cluster.bucketWork ? Math.round(cluster.bucketWork) : Math.round(cluster.length * parseFloat(milesStr));
+                    // Estimate drive time based on work score
                     var estMins = Math.round(cluster.length * 2 + parseFloat(milesStr) * 2);
                     var estTimeStr = estMins >= 60 ? Math.floor(estMins / 60) + 'h ' + (estMins % 60) + 'm' : estMins + ' min';
 
@@ -3333,7 +3335,7 @@
                     headerHtml += '<h3>' + escapeHtml(driver.name);
                     headerHtml += ' <span class="badge count">' + cluster.length + ' stops</span>';
                     headerHtml += ' <span class="badge miles">' + milesStr + ' mi</span>';
-                    headerHtml += ' <span class="badge" style="background:#9C27B0;color:white;">~' + estTimeStr + '</span>';
+                    headerHtml += ' <span class="badge" style="background:#9C27B0;color:white;">' + workScore + '</span>';
                     headerHtml += '</h3>';
                     headerHtml += '<div class="driver-actions">';
                     headerHtml += '<button class="btn btn-secondary btn-small" data-action="play" data-index="' + i + '" title="Animate route">▶️ Play</button>';
@@ -3618,7 +3620,7 @@
                 })
             }).addTo(map).bindPopup('DROP-OFF: ' + dropoff.address);
 
-            // Draw straight line first as fallback (stops only, no return to dropoff)
+            // Draw dashed straight line as fallback first
             var straightLatlngs = [];
             for (var i = 0; i < cluster.length; i++) {
                 straightLatlngs.push([cluster[i].lat, cluster[i].lng]);
@@ -3631,11 +3633,12 @@
                 dashArray: '5, 10'
             }).addTo(map);
 
-            // Try to get actual driving route from OSRM (stops only, no return to dropoff)
+            // Fetch OSRM route and replace the dashed line
             fetchOSRMRoute(cluster, null, function(routeCoords) {
                 if (routeCoords && routeCoords.length > 0) {
-                    // Remove straight line and add actual route
+                    // Remove dashed line
                     map.removeLayer(straightLine);
+                    // Add OSRM route
                     var routeLine = L.polyline(routeCoords, {
                         color: '#E87C1E',
                         weight: 4,
@@ -3937,7 +3940,37 @@
 
         // Fetch driving route from OSRM (free, no API key)
         // If dropoffPoint is null, only route through stops (no return trip)
+        // OSRM request queue to avoid rate limiting (429 errors)
+        var osrmQueue = [];
+        var osrmProcessing = false;
+        var osrmDelay = 300; // ms between requests
+
+        function processOSRMQueue() {
+            if (osrmProcessing || osrmQueue.length === 0) return;
+            osrmProcessing = true;
+
+            var item = osrmQueue.shift();
+            executeOSRMFetch(item.cluster, item.dropoffPoint, function(result) {
+                item.callback(result);
+                osrmProcessing = false;
+                // Process next item after delay
+                if (osrmQueue.length > 0) {
+                    setTimeout(processOSRMQueue, osrmDelay);
+                }
+            });
+        }
+
         function fetchOSRMRoute(cluster, dropoffPoint, callback) {
+            // Add to queue instead of executing immediately
+            osrmQueue.push({
+                cluster: cluster,
+                dropoffPoint: dropoffPoint,
+                callback: callback
+            });
+            processOSRMQueue();
+        }
+
+        function executeOSRMFetch(cluster, dropoffPoint, callback) {
             if (cluster.length === 0) {
                 callback(null);
                 return;
@@ -3973,8 +4006,19 @@
             var url = 'https://router.project-osrm.org/route/v1/driving/' + coordsStr + '?overview=full&geometries=geojson';
 
             fetch(url)
-                .then(function(response) { return response.json(); })
+                .then(function(response) {
+                    if (response.status === 429) {
+                        // Rate limited - retry after longer delay
+                        console.log('OSRM rate limited, retrying...');
+                        setTimeout(function() {
+                            executeOSRMFetch(cluster, dropoffPoint, callback);
+                        }, 1000);
+                        return null;
+                    }
+                    return response.json();
+                })
                 .then(function(data) {
+                    if (data === null) return; // Rate limited, will retry
                     if (data.code === 'Ok' && data.routes && data.routes[0]) {
                         var coords = data.routes[0].geometry.coordinates;
                         // Convert [lng, lat] to [lat, lng] for Leaflet
@@ -4036,7 +4080,7 @@
 
                 var color = routeColors[i % routeColors.length];
 
-                // Draw full connecting line through all stops
+                // Draw dashed straight line as fallback first
                 var latlngs = [];
                 for (var j = 0; j < cluster.length; j++) {
                     latlngs.push([cluster[j].lat, cluster[j].lng]);
@@ -4046,14 +4090,34 @@
                 if (latlngs.length > 1) {
                     polyline = L.polyline(latlngs, {
                         color: color,
-                        weight: 3,
-                        opacity: 0.8
+                        weight: 2,
+                        opacity: 0.3,
+                        dashArray: '5, 10'
                     }).addTo(summaryMap);
                 } else {
-                    // Fallback empty polyline
-                    polyline = L.polyline([], { color: color, weight: 3, opacity: 0.8 }).addTo(summaryMap);
+                    polyline = L.polyline([], { color: color, weight: 2, opacity: 0.3 }).addTo(summaryMap);
                 }
-                summaryPolylines.push({ line: polyline, driverIndex: i, color: color });
+
+                var polylineData = { line: polyline, driverIndex: i, color: color };
+                summaryPolylines.push(polylineData);
+
+                // Fetch OSRM route and replace the dashed line
+                (function(clusterData, polylineRef, routeColor) {
+                    fetchOSRMRoute(clusterData, null, function(routeCoords) {
+                        if (routeCoords && routeCoords.length > 0) {
+                            // Remove dashed line
+                            if (polylineRef.line) {
+                                summaryMap.removeLayer(polylineRef.line);
+                            }
+                            // Add OSRM route
+                            polylineRef.line = L.polyline(routeCoords, {
+                                color: routeColor,
+                                weight: 3,
+                                opacity: 0.8
+                            }).addTo(summaryMap);
+                        }
+                    });
+                })(cluster, polylineData, color);
 
                 // Calculate center of mass for driver number placement
                 var centerLat = 0, centerLng = 0;
@@ -4355,12 +4419,13 @@
             html += '}';
             html += '@media screen{.print-check{display:none}}';
             html += '</style></head><body>';
+            // Use same calculations as overview legend
+            var workScore = cluster.bucketWork ? Math.round(cluster.bucketWork) : Math.round(cluster.length * parseFloat(miles));
             // Estimate drive time: ~2 min per stop + ~2 min per mile (suburban driving with stops)
             var estimatedMinutes = Math.round(cluster.length * 2 + parseFloat(miles) * 2);
             var hours = Math.floor(estimatedMinutes / 60);
             var mins = estimatedMinutes % 60;
             var timeStr = hours > 0 ? hours + 'h ' + mins + 'm' : mins + ' min';
-            var workScore = Math.round(cluster.length * parseFloat(miles));
 
             html += '<div class="header"><h1>🍞 ' + escapeHtml(driver.name) + '</h1>';
             html += '<p>Betty Lou\'s Pantry — Letter Carrier Food Drive</p>';
