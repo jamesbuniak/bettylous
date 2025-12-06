@@ -346,6 +346,9 @@
         var dropoff = { address: '', lat: 0, lng: 0 };
         var balanceLog = []; // Debug log for balancing algorithm
 
+        // Animation state for route playback
+        var routeAnimations = {};  // driverIndex -> { carMarker, routeCoords, animationId, isPlaying, speed, progress }
+
         // DOM ELEMENTS
         var loadDatabaseBtn = document.getElementById('loadDatabaseBtn');
         var dropZone = document.getElementById('dropZone');
@@ -3239,12 +3242,24 @@
                     headerHtml += ' <span class="badge" style="background:#9C27B0;color:white;">~' + estTimeStr + '</span>';
                     headerHtml += '</h3>';
                     headerHtml += '<div class="driver-actions">';
+                    headerHtml += '<button class="btn btn-secondary btn-small" data-action="play" data-index="' + i + '" title="Animate route">▶️ Play</button>';
                     headerHtml += '<button class="btn btn-secondary btn-small" data-action="html" data-index="' + i + '">📄 HTML</button>';
                     headerHtml += '<button class="btn btn-secondary btn-small" data-action="copy" data-index="' + i + '">📋 Copy</button>';
                     headerHtml += '</div></div>';
 
                     // Defer address list rendering - only render first 20 initially, rest on demand
                     var contentHtml = '<div class="driver-content" id="driver-content-' + i + '">';
+                    // Animation controls (hidden by default)
+                    contentHtml += '<div class="animation-controls" id="anim-controls-' + i + '" style="display:none;padding:8px 12px;background:#f5f5f5;border-radius:6px;margin-bottom:8px;display:none;align-items:center;gap:10px;flex-wrap:wrap;">';
+                    contentHtml += '<button class="btn btn-small" data-anim="playpause" data-index="' + i + '" style="min-width:70px;">⏸️ Pause</button>';
+                    contentHtml += '<button class="btn btn-small" data-anim="stop" data-index="' + i + '">⏹️ Stop</button>';
+                    contentHtml += '<span style="font-size:12px;color:#666;">Speed:</span>';
+                    contentHtml += '<button class="btn btn-small speed-btn" data-anim="speed" data-speed="1" data-index="' + i + '" style="background:#E87C1E;color:white;">1x</button>';
+                    contentHtml += '<button class="btn btn-small speed-btn" data-anim="speed" data-speed="2" data-index="' + i + '">2x</button>';
+                    contentHtml += '<button class="btn btn-small speed-btn" data-anim="speed" data-speed="4" data-index="' + i + '">4x</button>';
+                    contentHtml += '<div style="flex:1;min-width:100px;"><div class="progress-bar" style="height:6px;background:#ddd;border-radius:3px;overflow:hidden;"><div class="progress-fill" id="anim-progress-' + i + '" style="width:0%;height:100%;background:#E87C1E;transition:width 0.1s;"></div></div></div>';
+                    contentHtml += '<span id="anim-stop-' + i + '" style="font-size:12px;color:#666;min-width:80px;">Stop 0/' + cluster.length + '</span>';
+                    contentHtml += '</div>';
                     contentHtml += '<div class="driver-map" id="driver-map-' + i + '"></div>';
                     contentHtml += '<div class="address-list" id="address-list-' + i + '">';
 
@@ -3324,6 +3339,31 @@
                         var idx = parseInt(this.getAttribute('data-index'));
                         if (action === 'html') downloadDriverHtml(idx);
                         if (action === 'copy') copyDriver(idx);
+                        if (action === 'play') startRouteAnimation(idx);
+                    });
+                }
+
+                // Animation control handlers
+                var animBtns = driverResults.querySelectorAll('button[data-anim]');
+                for (var a = 0; a < animBtns.length; a++) {
+                    animBtns[a].addEventListener('click', function(e) {
+                        e.stopPropagation();
+                        var anim = this.getAttribute('data-anim');
+                        var idx = parseInt(this.getAttribute('data-index'));
+                        if (anim === 'playpause') toggleAnimationPause(idx);
+                        if (anim === 'stop') stopRouteAnimation(idx);
+                        if (anim === 'speed') {
+                            var speed = parseInt(this.getAttribute('data-speed'));
+                            setAnimationSpeed(idx, speed);
+                            // Update button styles
+                            var siblings = this.parentElement.querySelectorAll('.speed-btn');
+                            for (var s = 0; s < siblings.length; s++) {
+                                siblings[s].style.background = '';
+                                siblings[s].style.color = '';
+                            }
+                            this.style.background = '#E87C1E';
+                            this.style.color = 'white';
+                        }
                     });
                 }
 
@@ -3397,19 +3437,55 @@
             bounds.extend([dropoff.lat, dropoff.lng]);
             map.fitBounds(bounds, { padding: [20, 20] });
 
-            // Add numbered markers for addresses
+            // Add small dot markers for addresses (numbers show on hover/zoom)
+            var addressMarkers = [];
             for (var i = 0; i < cluster.length; i++) {
                 var addr = cluster[i];
                 var marker = L.marker([addr.lat, addr.lng], {
                     icon: L.divIcon({
-                        className: 'custom-marker',
-                        html: '<div style="background:#E87C1E;color:white;width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:bold;border:2px solid white;box-shadow:0 2px 5px rgba(0,0,0,0.3);">' + (i + 1) + '</div>',
-                        iconSize: [24, 24],
-                        iconAnchor: [12, 12]
+                        className: 'custom-marker stop-marker',
+                        html: '<div class="marker-circle" data-stop="' + (i + 1) + '" style="background:#E87C1E;width:8px;height:8px;border-radius:50%;border:2px solid white;box-shadow:0 1px 3px rgba(0,0,0,0.3);transition:all 0.2s;"></div>',
+                        iconSize: [12, 12],
+                        iconAnchor: [6, 6]
                     })
                 }).addTo(map);
-                marker.bindPopup((i + 1) + '. ' + addr.fullAddress);
+                marker.bindPopup('<strong>Stop ' + (i + 1) + '</strong><br>' + addr.fullAddress);
+                marker.stopIndex = i;
+                marker.on('click', (function(idx) {
+                    return function() {
+                        highlightStopOnMap(driverIndex, idx, addressMarkers);
+                    };
+                })(i));
+                addressMarkers.push(marker);
             }
+
+            // Show stop numbers when zoomed in
+            map.on('zoomend', function() {
+                var zoom = map.getZoom();
+                var showNumbers = zoom >= 15;
+                for (var i = 0; i < addressMarkers.length; i++) {
+                    var el = addressMarkers[i].getElement();
+                    if (el) {
+                        var circle = el.querySelector('.marker-circle');
+                        if (circle) {
+                            if (showNumbers) {
+                                circle.style.width = '20px';
+                                circle.style.height = '20px';
+                                circle.style.fontSize = '10px';
+                                circle.style.color = 'white';
+                                circle.style.display = 'flex';
+                                circle.style.alignItems = 'center';
+                                circle.style.justifyContent = 'center';
+                                circle.innerHTML = circle.getAttribute('data-stop');
+                            } else {
+                                circle.style.width = '8px';
+                                circle.style.height = '8px';
+                                circle.innerHTML = '';
+                            }
+                        }
+                    }
+                }
+            });
 
             // Add dropoff marker
             L.marker([dropoff.lat, dropoff.lng], {
@@ -3439,16 +3515,304 @@
                 if (routeCoords && routeCoords.length > 0) {
                     // Remove straight line and add actual route
                     map.removeLayer(straightLine);
-                    L.polyline(routeCoords, {
+                    var routeLine = L.polyline(routeCoords, {
                         color: '#E87C1E',
                         weight: 4,
                         opacity: 0.8
                     }).addTo(map);
+
+                    // Add click handler to find nearest stop
+                    routeLine.on('click', function(e) {
+                        var clickLat = e.latlng.lat;
+                        var clickLng = e.latlng.lng;
+                        var nearestIdx = 0;
+                        var nearestDist = Infinity;
+                        for (var i = 0; i < cluster.length; i++) {
+                            var dist = Math.abs(cluster[i].lat - clickLat) + Math.abs(cluster[i].lng - clickLng);
+                            if (dist < nearestDist) {
+                                nearestDist = dist;
+                                nearestIdx = i;
+                            }
+                        }
+                        highlightStopOnMap(driverIndex, nearestIdx, addressMarkers);
+                    });
                 }
             });
 
+            // Store markers for later use
             driverMaps[driverIndex] = map;
+            driverMaps[driverIndex].addressMarkers = addressMarkers;
         }
+
+        // ============================================
+        // ROUTE ANIMATION FUNCTIONS
+        // ============================================
+
+        function startRouteAnimation(driverIndex) {
+            var map = driverMaps[driverIndex];
+            var cluster = clusters[driverIndex];
+            if (!map || !cluster || cluster.length === 0) {
+                // Make sure card is open and map is initialized
+                var content = document.getElementById('driver-content-' + driverIndex);
+                if (!content.classList.contains('open')) {
+                    content.classList.add('open');
+                    setTimeout(function() {
+                        initSingleDriverMap(driverIndex);
+                        setTimeout(function() { startRouteAnimation(driverIndex); }, 300);
+                    }, 150);
+                    return;
+                }
+                return;
+            }
+
+            // Show animation controls
+            var controls = document.getElementById('anim-controls-' + driverIndex);
+            if (controls) controls.style.display = 'flex';
+
+            // If animation already exists, just resume
+            if (routeAnimations[driverIndex]) {
+                routeAnimations[driverIndex].isPlaying = true;
+                var ppBtn = document.querySelector('[data-anim="playpause"][data-index="' + driverIndex + '"]');
+                if (ppBtn) ppBtn.innerHTML = '⏸️ Pause';
+                runAnimation(driverIndex);
+                return;
+            }
+
+            // Fetch OSRM route for smooth animation
+            fetchOSRMRoute(cluster, null, function(routeCoords) {
+                if (!routeCoords || routeCoords.length === 0) {
+                    // Fallback to straight line coords
+                    routeCoords = [];
+                    for (var i = 0; i < cluster.length; i++) {
+                        routeCoords.push([cluster[i].lat, cluster[i].lng]);
+                    }
+                }
+
+                // Create car marker (stays horizontal)
+                var carIcon = L.divIcon({
+                    className: 'car-marker',
+                    html: '<div style="font-size:24px;">🚗</div>',
+                    iconSize: [30, 30],
+                    iconAnchor: [15, 15]
+                });
+
+                var carMarker = L.marker(routeCoords[0], { icon: carIcon, zIndexOffset: 1000 }).addTo(map);
+
+                // Store animation state
+                routeAnimations[driverIndex] = {
+                    carMarker: carMarker,
+                    routeCoords: routeCoords,
+                    stopCoords: cluster.map(function(a) { return [a.lat, a.lng]; }),
+                    animationId: null,
+                    isPlaying: true,
+                    speed: 1,
+                    progress: 0,  // 0 to 1
+                    startTime: null,
+                    baseDuration: 60000  // 60 seconds at 1x speed
+                };
+
+                runAnimation(driverIndex);
+            });
+        }
+
+        function runAnimation(driverIndex) {
+            var anim = routeAnimations[driverIndex];
+            if (!anim || !anim.isPlaying) return;
+
+            var map = driverMaps[driverIndex];
+            var cluster = clusters[driverIndex];
+            if (!map) return;
+
+            if (!anim.startTime) {
+                anim.startTime = performance.now() - (anim.progress * anim.baseDuration / anim.speed);
+            }
+
+            function animate(timestamp) {
+                if (!anim.isPlaying) return;
+
+                var elapsed = timestamp - anim.startTime;
+                var duration = anim.baseDuration / anim.speed;
+                anim.progress = Math.min(elapsed / duration, 1);
+
+                var coordIndex = Math.floor(anim.progress * (anim.routeCoords.length - 1));
+                var currentCoord = anim.routeCoords[coordIndex];
+
+                // Move car (keep horizontal, no rotation)
+                anim.carMarker.setLatLng(currentCoord);
+
+                // Find which stop we're at
+                var currentStop = 0;
+                for (var i = 0; i < anim.stopCoords.length; i++) {
+                    var stopCoord = anim.stopCoords[i];
+                    var dist = Math.abs(stopCoord[0] - currentCoord[0]) + Math.abs(stopCoord[1] - currentCoord[1]);
+                    if (dist < 0.001) {
+                        currentStop = i + 1;
+                    } else if (i > 0) {
+                        // Check if we've passed this stop
+                        var prevStopIdx = Math.floor((i / anim.stopCoords.length) * anim.routeCoords.length);
+                        if (coordIndex >= prevStopIdx) currentStop = i + 1;
+                    }
+                }
+                currentStop = Math.min(Math.floor(anim.progress * cluster.length) + 1, cluster.length);
+
+                // Update UI
+                var progressBar = document.getElementById('anim-progress-' + driverIndex);
+                var stopDisplay = document.getElementById('anim-stop-' + driverIndex);
+                if (progressBar) progressBar.style.width = (anim.progress * 100) + '%';
+                if (stopDisplay) stopDisplay.textContent = 'Stop ' + currentStop + '/' + cluster.length;
+
+                // Highlight current address in list
+                highlightAddressInList(driverIndex, currentStop - 1);
+
+                if (anim.progress < 1) {
+                    anim.animationId = requestAnimationFrame(animate);
+                } else {
+                    // Animation complete
+                    stopRouteAnimation(driverIndex);
+                    showToast('Route animation complete!');
+                }
+            }
+
+            anim.animationId = requestAnimationFrame(animate);
+        }
+
+        function toggleAnimationPause(driverIndex) {
+            var anim = routeAnimations[driverIndex];
+            if (!anim) return;
+
+            var ppBtn = document.querySelector('[data-anim="playpause"][data-index="' + driverIndex + '"]');
+
+            if (anim.isPlaying) {
+                anim.isPlaying = false;
+                anim.startTime = null;  // Reset so we can resume from current position
+                if (anim.animationId) cancelAnimationFrame(anim.animationId);
+                if (ppBtn) ppBtn.innerHTML = '▶️ Play';
+            } else {
+                anim.isPlaying = true;
+                if (ppBtn) ppBtn.innerHTML = '⏸️ Pause';
+                runAnimation(driverIndex);
+            }
+        }
+
+        function stopRouteAnimation(driverIndex) {
+            var anim = routeAnimations[driverIndex];
+            if (!anim) return;
+
+            anim.isPlaying = false;
+            if (anim.animationId) cancelAnimationFrame(anim.animationId);
+
+            // Remove car marker
+            var map = driverMaps[driverIndex];
+            if (map && anim.carMarker) {
+                map.removeLayer(anim.carMarker);
+            }
+
+            // Hide controls
+            var controls = document.getElementById('anim-controls-' + driverIndex);
+            if (controls) controls.style.display = 'none';
+
+            // Reset progress bar
+            var progressBar = document.getElementById('anim-progress-' + driverIndex);
+            if (progressBar) progressBar.style.width = '0%';
+
+            // Update play button text
+            var ppBtn = document.querySelector('[data-anim="playpause"][data-index="' + driverIndex + '"]');
+            if (ppBtn) ppBtn.innerHTML = '⏸️ Pause';
+
+            // Clear animation state
+            delete routeAnimations[driverIndex];
+
+            // Clear address highlight
+            highlightAddressInList(driverIndex, -1);
+        }
+
+        function setAnimationSpeed(driverIndex, speed) {
+            var anim = routeAnimations[driverIndex];
+            if (!anim) return;
+
+            // Preserve current progress when changing speed
+            anim.speed = speed;
+            anim.startTime = null;  // Will be recalculated in next frame
+        }
+
+        function highlightAddressInList(driverIndex, addressIndex) {
+            var addressList = document.getElementById('address-list-' + driverIndex);
+            if (!addressList) return;
+
+            // Remove previous highlight
+            var items = addressList.querySelectorAll('.address-item:not(.dropoff):not(.load-more)');
+            for (var i = 0; i < items.length; i++) {
+                items[i].classList.remove('highlighted');
+                items[i].style.background = '';
+                items[i].style.borderLeft = '';
+            }
+
+            if (addressIndex < 0) return;
+
+            // Find and highlight current address
+            if (items[addressIndex]) {
+                items[addressIndex].classList.add('highlighted');
+                items[addressIndex].style.background = '#fff3e0';
+                items[addressIndex].style.borderLeft = '3px solid #E87C1E';
+                // Scroll into view
+                items[addressIndex].scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            }
+        }
+
+        function highlightStopOnMap(driverIndex, stopIndex, markers) {
+            var cluster = clusters[driverIndex];
+            if (!cluster) return;
+
+            // Reset all markers to default small dot style
+            for (var i = 0; i < markers.length; i++) {
+                var el = markers[i].getElement();
+                if (el) {
+                    var circle = el.querySelector('.marker-circle');
+                    if (circle) {
+                        circle.style.background = '#E87C1E';
+                        circle.style.width = '8px';
+                        circle.style.height = '8px';
+                        circle.style.boxShadow = '0 1px 3px rgba(0,0,0,0.3)';
+                        circle.innerHTML = '';
+                    }
+                }
+            }
+
+            // Highlight selected marker - make it bigger with stop number
+            if (markers[stopIndex]) {
+                var el = markers[stopIndex].getElement();
+                if (el) {
+                    var circle = el.querySelector('.marker-circle');
+                    if (circle) {
+                        circle.style.background = '#2196F3';
+                        circle.style.width = '24px';
+                        circle.style.height = '24px';
+                        circle.style.fontSize = '11px';
+                        circle.style.color = 'white';
+                        circle.style.display = 'flex';
+                        circle.style.alignItems = 'center';
+                        circle.style.justifyContent = 'center';
+                        circle.style.boxShadow = '0 0 15px rgba(33, 150, 243, 0.8)';
+                        circle.innerHTML = stopIndex + 1;
+                    }
+                }
+                // Open popup
+                markers[stopIndex].openPopup();
+            }
+
+            // Also highlight in address list
+            highlightAddressInList(driverIndex, stopIndex);
+
+            // Show info toast
+            var addr = cluster[stopIndex];
+            if (addr) {
+                showToast('Stop ' + (stopIndex + 1) + ': ' + addr.address);
+            }
+        }
+
+        // ============================================
+        // END ROUTE ANIMATION FUNCTIONS
+        // ============================================
 
         // Fetch driving route from OSRM (free, no API key)
         // If dropoffPoint is null, only route through stops (no return trip)
