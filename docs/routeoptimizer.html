@@ -202,14 +202,19 @@
                     <small style="display: block; margin-top: 3px; visibility: hidden;">.</small>
                 </div>
                 <div class="form-group">
-                    <label for="minAddresses">Min addresses/driver</label>
-                    <input type="number" id="minAddresses" value="0" min="0" style="width: 100px;">
-                    <small style="display: block; margin-top: 3px;">0 = no minimum</small>
+                    <label for="avgSpeed">Avg speed (mph)</label>
+                    <input type="number" id="avgSpeed" value="25" min="5" max="60" style="width: 100px;">
+                    <small style="display: block; margin-top: 3px;">For drive time calc</small>
                 </div>
                 <div class="form-group">
-                    <label for="maxAddresses">Max addresses/driver</label>
-                    <input type="number" id="maxAddresses" value="0" min="0" style="width: 100px;">
-                    <small style="display: block; margin-top: 3px;">0 = no limit</small>
+                    <label for="foodGrabInterval">Food grab every X stops</label>
+                    <input type="number" id="foodGrabInterval" value="10" min="1" style="width: 100px;">
+                    <small style="display: block; margin-top: 3px;">Driver restocks</small>
+                </div>
+                <div class="form-group">
+                    <label for="foodGrabWork">Work per food grab</label>
+                    <input type="number" id="foodGrabWork" value="5" min="0" style="width: 100px;">
+                    <small style="display: block; margin-top: 3px;">Added work units</small>
                 </div>
             </div>
             <div class="driver-list" id="driverList"></div>
@@ -362,8 +367,9 @@
         var dropoffAddressInput = document.getElementById('dropoffAddress');
         var dropoffLatInput = document.getElementById('dropoffLat');
         var dropoffLngInput = document.getElementById('dropoffLng');
-        var minAddressesInput = document.getElementById('minAddresses');
-        var maxAddressesInput = document.getElementById('maxAddresses');
+        var avgSpeedInput = document.getElementById('avgSpeed');
+        var foodGrabIntervalInput = document.getElementById('foodGrabInterval');
+        var foodGrabWorkInput = document.getElementById('foodGrabWork');
         var summaryMapEl = document.getElementById('summaryMap');
         var summaryLegendEl = document.getElementById('summaryLegend');
         
@@ -948,8 +954,20 @@
                 for (var i = 1; i < cluster.length; i++) {
                     miles += haversine(cluster[i-1].lat, cluster[i-1].lng, cluster[i].lat, cluster[i].lng);
                 }
-                // Work = stops × internal miles (add small base to avoid zero)
-                return cluster.length * (miles + 0.1);
+
+                // Drive time component: miles / speed = hours, convert to minutes
+                var avgSpeed = parseInt(avgSpeedInput.value) || 25;
+                var driveTimeMinutes = (miles / avgSpeed) * 60;
+
+                // Base work = stops + drive time (each stop = 1 work unit, each minute = 1 work unit)
+                var baseWork = cluster.length + driveTimeMinutes;
+
+                // Add fixed overhead for food grabs (driver gets out to restock from vehicle)
+                var grabInterval = parseInt(foodGrabIntervalInput.value) || 10;
+                var grabWork = parseInt(foodGrabWorkInput.value) || 5;
+                var foodGrabOverhead = Math.floor(cluster.length / grabInterval) * grabWork;
+
+                return baseWork + foodGrabOverhead;
             }
 
             // STEP 3: Build ONE Steered Route
