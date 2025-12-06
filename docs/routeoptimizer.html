@@ -114,7 +114,69 @@
             padding: 4px 8px; border-radius: 4px; background: #fff8f0;
         }
         .address-item a:hover { background: #ffedd5; }
+        .street-group { border-bottom: 1px solid #eee; }
+        .street-group:last-child { border-bottom: none; }
+        .street-header {
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 10px 0; cursor: pointer; user-select: none;
+        }
+        .street-header:hover { background: #f9f9f9; margin: 0 -8px; padding: 10px 8px; border-radius: 4px; }
+        .street-header .street-name { font-weight: 600; color: #333; flex: 1; }
+        .street-header .street-count { color: #888; font-size: 0.85rem; margin-right: 8px; }
+        .street-header .street-toggle { color: #E87C1E; font-size: 0.8rem; transition: transform 0.2s; }
+        .street-header.collapsed .street-toggle { transform: rotate(-90deg); }
+        .street-addresses { padding-left: 15px; border-left: 2px solid #E87C1E; margin-left: 5px; max-height: 1000px; overflow: hidden; transition: max-height 0.3s ease; }
+        .street-addresses.collapsed { max-height: 0; padding-top: 0; padding-bottom: 0; }
         .progress { display: none; margin-top: 15px; }
+
+        /* Smooth transitions */
+        .card, .driver-card, .btn { transition: all 0.2s ease; }
+        .driver-content { transition: all 0.3s ease; }
+
+        /* Mobile responsiveness */
+        @media (max-width: 768px) {
+            body { padding: 10px; }
+            .card { padding: 15px; }
+            header h1 { font-size: 1.6rem; }
+            .logo { width: 80px; height: 80px; font-size: 2rem; }
+
+            /* Stack setup grid on mobile */
+            #setupSection .card > div[style*="grid-template-columns"] {
+                display: block !important;
+            }
+            #setupSection .card > div[style*="grid-template-columns"] > div {
+                margin-bottom: 20px;
+            }
+            #setupSection .card > div[style*="grid-template-columns"] > div:last-child {
+                margin-bottom: 0;
+            }
+
+            /* Stack driver/settings row */
+            #setupSection .card > div[style*="display: flex"] {
+                flex-direction: column !important;
+                gap: 15px !important;
+            }
+
+            /* Full-width generate button on mobile */
+            #generateBtn { width: 100%; }
+
+            /* Results header stack */
+            .results-header { flex-direction: column; align-items: flex-start; }
+            .results-actions { width: 100%; justify-content: space-between; }
+            .results-actions .btn { flex: 1; padding: 10px 8px; font-size: 0.85rem; }
+
+            /* Total stats scroll */
+            .total-stats { overflow-x: auto; flex-wrap: nowrap; padding-bottom: 5px; }
+            .total-stat { min-width: 100px; flex-shrink: 0; }
+
+            /* Driver card header */
+            .driver-header { flex-direction: column; align-items: flex-start; gap: 10px; }
+            .driver-actions { width: 100%; justify-content: space-between; }
+
+            /* Address list */
+            .address-item { flex-direction: column; align-items: flex-start; gap: 5px; }
+            .address-item a { align-self: flex-end; }
+        }
         .progress-bar { height: 8px; background: #e0e0e0; border-radius: 4px; overflow: hidden; }
         .progress-fill {
             height: 100%; background: linear-gradient(135deg, #E87C1E 0%, #C4650F 100%);
@@ -142,102 +204,96 @@
             <p>Letter Carrier Food Drive — Route Optimizer</p>
         </header>
         
-        <div class="card" style="background: linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%); border: 2px solid #4CAF50;">
-            <h2 style="color: #2e7d32;">🆓 No API Key Required!</h2>
-            <p style="color: #388e3c; margin: 0;">This tool uses free OpenStreetMap maps. No setup needed — just upload your addresses and generate routes.</p>
-        </div>
-        
-        <div class="card">
-            <h2>Step 2: Drop-off Location (End Point for All Routes)</h2>
-            <div class="form-group">
-                <label for="dropoffAddress">Drop-off Address</label>
-                <input type="text" id="dropoffAddress" value="538 Thomas St, Coopersburg, PA 18036" style="max-width: 100%;">
-            </div>
-            <div class="inline-group">
-                <div class="form-group">
-                    <label for="dropoffLat">Latitude</label>
-                    <input type="text" id="dropoffLat" value="40.5193" style="width: 150px;">
+        <!-- Setup Section (hidden after generation) -->
+        <div id="setupSection">
+            <!-- Row 1: Drop-off + Upload side by side -->
+            <div class="card">
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 30px;">
+                    <!-- Drop-off Location -->
+                    <div>
+                        <h3 style="margin-top: 0; margin-bottom: 12px; color: #333;">📍 Drop-off Location</h3>
+                        <div class="form-group" style="margin-bottom: 10px;">
+                            <input type="text" id="dropoffAddress" value="538 Thomas St, Coopersburg, PA 18036" placeholder="Drop-off address" style="width: 100%;">
+                        </div>
+                        <div style="display: flex; gap: 10px;">
+                            <input type="text" id="dropoffLat" value="40.5193" placeholder="Latitude" style="width: 100px; font-size: 0.85rem;">
+                            <input type="text" id="dropoffLng" value="-75.3897" placeholder="Longitude" style="width: 100px; font-size: 0.85rem;">
+                        </div>
+                    </div>
+
+                    <!-- Address Upload -->
+                    <div>
+                        <h3 style="margin-top: 0; margin-bottom: 12px; color: #333;">📄 Address List</h3>
+                        <div style="display: flex; gap: 10px; margin-bottom: 10px;">
+                            <button class="btn btn-primary" id="loadDatabaseBtn" style="flex: 1;">Use Database</button>
+                            <a href="addresses.csv" download class="btn btn-secondary" style="text-decoration: none;">CSV ↓</a>
+                        </div>
+                        <div class="drop-zone" id="dropZone" style="padding: 15px; min-height: auto;">
+                            <p style="margin: 0; font-size: 0.85rem;"><strong>Drop CSV here</strong> or click to browse</p>
+                            <input type="file" id="fileInput" accept=".csv">
+                        </div>
+                        <div class="stats" id="fileStats" style="display: none; margin-top: 8px; font-size: 0.85rem;"></div>
+                    </div>
                 </div>
-                <div class="form-group">
-                    <label for="dropoffLng">Longitude</label>
-                    <input type="text" id="dropoffLng" value="-75.3897" style="width: 150px;">
+            </div>
+
+            <!-- Row 2: Drivers + Settings + Generate -->
+            <div class="card">
+                <div style="display: flex; gap: 20px; align-items: flex-start; flex-wrap: wrap;">
+                    <div class="form-group" style="margin: 0;">
+                        <label for="driverCount" style="font-weight: 600;">Drivers</label>
+                        <input type="number" id="driverCount" value="20" min="1" max="100" style="width: 70px;">
+                    </div>
+
+                    <details style="flex: 1; min-width: 200px;">
+                        <summary style="cursor: pointer; color: #666; font-size: 0.9rem; padding: 8px 0;">⚙️ Advanced Settings</summary>
+                        <div style="display: flex; gap: 15px; flex-wrap: wrap; margin-top: 10px; padding: 10px; background: #f9f9f9; border-radius: 6px;">
+                            <div class="form-group" style="margin: 0;">
+                                <label for="avgSpeed" style="font-size: 0.8rem;">Avg Speed (mph)</label>
+                                <input type="number" id="avgSpeed" value="25" min="5" max="60" style="width: 70px;">
+                            </div>
+                            <div class="form-group" style="margin: 0;">
+                                <label for="foodGrabInterval" style="font-size: 0.8rem;">Food Grab Every</label>
+                                <input type="number" id="foodGrabInterval" value="10" min="1" style="width: 70px;">
+                            </div>
+                            <div class="form-group" style="margin: 0;">
+                                <label for="foodGrabWork" style="font-size: 0.8rem;">Grab Work Units</label>
+                                <input type="number" id="foodGrabWork" value="5" min="0" style="width: 70px;">
+                            </div>
+                        </div>
+                    </details>
+
+                    <button class="btn btn-primary" id="generateBtn" disabled style="padding: 12px 30px; font-size: 1rem;">🚀 Generate Routes</button>
+                </div>
+
+                <div class="progress" id="progress" style="margin-top: 15px;">
+                    <div class="progress-bar">
+                        <div class="progress-fill" id="progressFill"></div>
+                    </div>
+                    <div class="progress-text" id="progressText">Processing...</div>
                 </div>
             </div>
-            <div class="dropoff-info">📍 All routes will END at this drop-off location</div>
-        </div>
-        
-        <div class="card">
-            <h2>Step 3: Address List</h2>
-            <p style="color: #666; margin-bottom: 15px;">Use the database addresses or upload your own geocoded CSV. <a href="geocoder.html">Need to geocode first?</a></p>
 
-            <div style="display: flex; gap: 15px; margin-bottom: 15px; flex-wrap: wrap;">
-                <button class="btn btn-primary" id="loadDatabaseBtn">Use Database Addresses</button>
-                <a href="addresses.csv" download class="btn btn-secondary" style="text-decoration: none;">Download Database CSV</a>
-            </div>
-
-            <p style="color: #888; font-size: 0.9rem; margin-bottom: 10px;">— or upload a different file —</p>
-
-            <div class="drop-zone" id="dropZone">
-                <div class="icon">📄</div>
-                <p><strong>Drag & drop your CSV file here</strong></p>
-                <p>or click to browse</p>
-                <input type="file" id="fileInput" accept=".csv">
-            </div>
-            <div class="stats" id="fileStats" style="display: none;"></div>
-
-            <details style="margin-top: 15px;">
-                <summary style="cursor: pointer; color: #666; font-size: 0.9rem;">Expected CSV format</summary>
-                <pre style="background: #f5f5f5; padding: 10px; border-radius: 5px; font-size: 0.8rem; margin-top: 10px; overflow-x: auto;">Address,City,State,Zip,Latitude,Longitude
-123 Main St,Center Valley,PA,18034,40.5421,-75.3892
-456 Oak Ave,Coopersburg,PA,18036,40.5193,-75.3897</pre>
+            <!-- Driver Names (collapsible) -->
+            <details class="card" style="padding: 0;">
+                <summary style="padding: 15px; cursor: pointer; font-weight: 600;">👥 Driver Names (optional)</summary>
+                <div style="padding: 0 15px 15px 15px;">
+                    <div class="driver-list" id="driverList"></div>
+                </div>
             </details>
-        </div>
-        
-        <div class="card">
-            <h2>Step 4: Configure Drivers</h2>
-            <div class="inline-group" style="margin-bottom: 15px;">
-                <div class="form-group">
-                    <label for="driverCount">Number of drivers</label>
-                    <input type="number" id="driverCount" value="20" min="1" max="100" style="width: 100px;">
-                    <small style="display: block; margin-top: 3px; visibility: hidden;">.</small>
-                </div>
-                <div class="form-group">
-                    <label for="avgSpeed">Avg speed (mph)</label>
-                    <input type="number" id="avgSpeed" value="25" min="5" max="60" style="width: 100px;">
-                    <small style="display: block; margin-top: 3px;">For drive time calc</small>
-                </div>
-                <div class="form-group">
-                    <label for="foodGrabInterval">Food grab every X stops</label>
-                    <input type="number" id="foodGrabInterval" value="10" min="1" style="width: 100px;">
-                    <small style="display: block; margin-top: 3px;">Driver restocks</small>
-                </div>
-                <div class="form-group">
-                    <label for="foodGrabWork">Work per food grab</label>
-                    <input type="number" id="foodGrabWork" value="5" min="0" style="width: 100px;">
-                    <small style="display: block; margin-top: 3px;">Added work units</small>
-                </div>
-            </div>
-            <div class="driver-list" id="driverList"></div>
-        </div>
-        
-        <div class="card">
-            <h2>Step 5: Generate Routes</h2>
-            <button class="btn btn-primary" id="generateBtn" disabled>Generate Routes</button>
-            <div class="progress" id="progress">
-                <div class="progress-bar">
-                    <div class="progress-fill" id="progressFill"></div>
-                </div>
-                <div class="progress-text" id="progressText">Processing...</div>
-            </div>
         </div>
         
         <div class="card" id="results">
             <div class="results-header">
-                <h2>Routes Generated</h2>
+                <div style="display: flex; align-items: center; gap: 15px;">
+                    <button class="btn btn-secondary" id="backToSetupBtn" style="padding: 8px 15px;">← Back to Setup</button>
+                    <h2 style="margin: 0;">Routes Generated</h2>
+                </div>
                 <div class="results-actions">
                     <button class="btn btn-success" id="downloadAllHtmlBtn">Download All HTML</button>
+                    <button class="btn btn-secondary" id="downloadOverviewBtn">📸 Overview</button>
                     <button class="btn btn-secondary" id="downloadAllTxtBtn">Download All TXT</button>
-                    <button class="btn btn-secondary" id="downloadDebugLogBtn">Download Debug Log</button>
+                    <button class="btn btn-secondary" id="downloadDebugLogBtn">Debug Log</button>
                 </div>
             </div>
             <div class="total-stats" id="totalStats"></div>
@@ -257,6 +313,7 @@
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     
     <script>
     (function() {
@@ -3195,6 +3252,8 @@
         
         // RENDER RESULTS
         function renderResults() {
+            // Hide setup section, show results
+            document.getElementById('setupSection').style.display = 'none';
             results.style.display = 'block';
             driverResults.innerHTML = '';
 
@@ -3263,27 +3322,50 @@
                     contentHtml += '<div class="driver-map" id="driver-map-' + i + '"></div>';
                     contentHtml += '<div class="address-list" id="address-list-' + i + '">';
 
-                    var maxInitialRender = 20;
-                    var renderCount = Math.min(cluster.length, maxInitialRender);
-
-                    for (var j = 0; j < renderCount; j++) {
+                    // Group addresses by street
+                    var streetGroups = [];
+                    var currentStreet = '';
+                    var currentGroup = null;
+                    for (var j = 0; j < cluster.length; j++) {
                         var addr = cluster[j];
-                        contentHtml += '<div class="address-item">';
-                        contentHtml += '<span class="num">' + (j + 1) + '.</span>';
-                        contentHtml += '<span class="address">' + escapeHtml(addr.fullAddress) + '</span>';
-                        contentHtml += '<a href="' + getMapsLink(addr) + '" target="_blank">Maps ↗</a>';
-                        contentHtml += '</div>';
+                        addr.stopNum = j + 1;
+                        var streetName = getStreetName(addr.address);
+                        if (streetName !== currentStreet) {
+                            currentStreet = streetName;
+                            currentGroup = { street: streetName, addresses: [] };
+                            streetGroups.push(currentGroup);
+                        }
+                        currentGroup.addresses.push(addr);
                     }
 
-                    // Add "load more" placeholder if there are more addresses
-                    if (cluster.length > maxInitialRender) {
-                        contentHtml += '<div class="address-item load-more" data-driver="' + i + '" style="cursor:pointer;background:#fff8f0;justify-content:center;">';
-                        contentHtml += '<span style="color:#E87C1E;font-weight:600;">▼ Show ' + (cluster.length - maxInitialRender) + ' more addresses</span>';
+                    // Render street groups (first 5 expanded, rest collapsed)
+                    for (var sg = 0; sg < streetGroups.length; sg++) {
+                        var group = streetGroups[sg];
+                        var isCollapsed = sg >= 3; // First 3 streets expanded
+                        var groupId = 'street-' + i + '-' + sg;
+
+                        contentHtml += '<div class="street-group">';
+                        contentHtml += '<div class="street-header' + (isCollapsed ? ' collapsed' : '') + '" data-target="' + groupId + '">';
+                        contentHtml += '<span class="street-name">' + escapeHtml(group.street) + '</span>';
+                        contentHtml += '<span class="street-count">' + group.addresses.length + ' stop' + (group.addresses.length > 1 ? 's' : '') + '</span>';
+                        contentHtml += '<span class="street-toggle">▼</span>';
                         contentHtml += '</div>';
+                        contentHtml += '<div class="street-addresses' + (isCollapsed ? ' collapsed' : '') + '" id="' + groupId + '">';
+
+                        for (var sa = 0; sa < group.addresses.length; sa++) {
+                            var sAddr = group.addresses[sa];
+                            contentHtml += '<div class="address-item">';
+                            contentHtml += '<span class="num">' + sAddr.stopNum + '.</span>';
+                            contentHtml += '<span class="address">' + escapeHtml(sAddr.fullAddress) + '</span>';
+                            contentHtml += '<a href="' + getMapsLink(sAddr) + '" target="_blank">Maps ↗</a>';
+                            contentHtml += '</div>';
+                        }
+
+                        contentHtml += '</div></div>';
                     }
 
                     // Add dropoff as final stop
-                    contentHtml += '<div class="address-item dropoff">';
+                    contentHtml += '<div class="address-item dropoff" style="margin-top: 10px;">';
                     contentHtml += '<span class="num">END</span>';
                     contentHtml += '<span class="address">🏁 ' + escapeHtml(dropoff.address) + ' (Drop-off)</span>';
                     contentHtml += '<a href="' + getMapsLink(dropoff) + '" target="_blank">Maps ↗</a>';
@@ -3367,13 +3449,17 @@
                     });
                 }
 
-                // Load more handlers
-                var loadMoreBtns = driverResults.querySelectorAll('.load-more');
-                for (var l = 0; l < loadMoreBtns.length; l++) {
-                    loadMoreBtns[l].addEventListener('click', function(e) {
+                // Street header collapse/expand handlers
+                var streetHeaders = driverResults.querySelectorAll('.street-header');
+                for (var sh = 0; sh < streetHeaders.length; sh++) {
+                    streetHeaders[sh].addEventListener('click', function(e) {
                         e.stopPropagation();
-                        var driverIdx = parseInt(this.getAttribute('data-driver'));
-                        loadRemainingAddresses(driverIdx, this);
+                        var targetId = this.getAttribute('data-target');
+                        var target = document.getElementById(targetId);
+                        if (target) {
+                            this.classList.toggle('collapsed');
+                            target.classList.toggle('collapsed');
+                        }
                     });
                 }
             }
@@ -4324,6 +4410,61 @@
                 text = 'No debug log available. Generate routes first.';
             }
             downloadFile(text, 'route_balance_log_' + new Date().toISOString().slice(0, 10) + '.txt', 'text/plain');
+        });
+
+        // Back to Setup button
+        document.getElementById('backToSetupBtn').addEventListener('click', function() {
+            document.getElementById('setupSection').style.display = 'block';
+            results.style.display = 'none';
+        });
+
+        // Download Overview button - captures summary map and legend
+        document.getElementById('downloadOverviewBtn').addEventListener('click', function() {
+            if (!summaryMap) {
+                showToast('Generate routes first');
+                return;
+            }
+
+            showToast('Capturing overview...');
+
+            // Use html2canvas with useCORS and allowTaint for map tiles
+            var overviewSection = document.createElement('div');
+            overviewSection.style.cssText = 'position:absolute;left:-9999px;background:white;padding:20px;width:900px;';
+
+            // Title
+            var title = document.createElement('h2');
+            title.textContent = "Betty Lou's Pantry - Route Overview";
+            title.style.cssText = 'margin:0 0 15px 0;color:#E87C1E;text-align:center;';
+            overviewSection.appendChild(title);
+
+            // Stats
+            var statsClone = document.getElementById('totalStats').cloneNode(true);
+            statsClone.style.marginBottom = '15px';
+            overviewSection.appendChild(statsClone);
+
+            // Legend (move above map for screenshot)
+            var legendClone = document.getElementById('summaryLegend').cloneNode(true);
+            legendClone.style.marginBottom = '15px';
+            overviewSection.appendChild(legendClone);
+
+            // Map placeholder with note
+            var mapNote = document.createElement('div');
+            mapNote.style.cssText = 'background:#f5f5f5;padding:30px;text-align:center;border-radius:10px;color:#666;';
+            mapNote.innerHTML = '<p style="margin:0;">📍 See the interactive map in browser</p><p style="margin:10px 0 0 0;font-size:0.85rem;">Use browser Print (Ctrl+P) to capture the full map</p>';
+            overviewSection.appendChild(mapNote);
+
+            document.body.appendChild(overviewSection);
+
+            html2canvas(overviewSection, { scale: 2 }).then(function(canvas) {
+                document.body.removeChild(overviewSection);
+                canvas.toBlob(function(blob) {
+                    downloadFile(blob, 'route-overview-' + new Date().toISOString().slice(0, 10) + '.png', 'image/png');
+                    showToast('Overview downloaded!');
+                });
+            }).catch(function() {
+                document.body.removeChild(overviewSection);
+                showToast('Screenshot failed - try browser print');
+            });
         });
 
         // HELPERS
