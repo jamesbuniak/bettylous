@@ -32,10 +32,7 @@
             background: white;
             border-radius: 50%;
             margin: 0 auto 25px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 3.5rem;
+            object-fit: cover;
             box-shadow: 0 8px 30px rgba(0, 0, 0, 0.2);
         }
 
@@ -291,7 +288,10 @@
         }
 
         .footer-logo {
-            font-size: 1.5rem;
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            object-fit: cover;
         }
 
         .footer-links {
@@ -314,6 +314,91 @@
         .footer-info {
             font-size: 0.9rem;
             opacity: 0.85;
+        }
+
+        /* Tools Section */
+        .tools-card {
+            background: #f9f9f9;
+            border: 1px solid #e0e0e0;
+        }
+
+        .tools-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            cursor: pointer;
+            user-select: none;
+        }
+
+        .tools-header h2 {
+            margin-bottom: 0;
+            font-size: 1.1rem;
+            color: #666;
+        }
+
+        .tools-toggle {
+            font-size: 0.9rem;
+            color: #999;
+            transition: transform 0.2s;
+        }
+
+        .tools-toggle.collapsed {
+            transform: rotate(-90deg);
+        }
+
+        .tools-content {
+            margin-top: 15px;
+            overflow: hidden;
+            transition: max-height 0.3s ease;
+        }
+
+        .tools-content.collapsed {
+            max-height: 0;
+            margin-top: 0;
+        }
+
+        .tools-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 12px;
+        }
+
+        .tool-link {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px 15px;
+            background: white;
+            border-radius: 8px;
+            text-decoration: none;
+            color: inherit;
+            transition: all 0.2s;
+            border: 1px solid #e0e0e0;
+        }
+
+        .tool-link:hover {
+            border-color: #E87C1E;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+
+        .tool-icon {
+            font-size: 1.5rem;
+        }
+
+        .tool-info {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .tool-info strong {
+            font-size: 0.95rem;
+            color: #333;
+        }
+
+        .tool-info span {
+            font-size: 0.8rem;
+            color: #888;
         }
 
         /* Responsive */
@@ -375,7 +460,7 @@
 </head>
 <body>
     <header class="hero">
-        <div class="logo">🍞</div>
+        <img src="https://bettylouspantry.com/wp-content/uploads/2023/06/cropped-bettylouslogo.png" alt="Betty Lou's Pantry" class="logo">
         <h1>Betty Lou's Pantry</h1>
         <p class="tagline">Letter Carrier Food Drive</p>
         <p class="location">Coopersburg, PA</p>
@@ -385,67 +470,6 @@
     </header>
 
     <main class="container">
-        <section class="card">
-            <h2>
-                <span class="section-icon">📍</span>
-                Address Geocoder
-            </h2>
-            <p class="section-description">
-                Convert a list of addresses into latitude/longitude coordinates using the Google Maps API.
-                Use this first if your address list doesn't have coordinates yet.
-            </p>
-            <div class="feature-list">
-                <div class="feature">
-                    <span class="feature-icon">📄</span>
-                    <span>Upload CSV with Address, City, State, Zip</span>
-                </div>
-                <div class="feature">
-                    <span class="feature-icon">🌐</span>
-                    <span>Uses Google Geocoding API</span>
-                </div>
-                <div class="feature">
-                    <span class="feature-icon">📥</span>
-                    <span>Download CSV with lat/long added</span>
-                </div>
-            </div>
-            <a href="geocoder.html" class="btn-primary">
-                Open Geocoder
-            </a>
-        </section>
-
-        <section class="card">
-            <h2>
-                <span class="section-icon">📊</span>
-                Route Optimizer
-            </h2>
-            <p class="section-description">
-                Create optimized pickup routes for letter carrier food drive volunteers.
-                Upload addresses with coordinates, set the number of drivers, and generate efficient routes
-                that end at the drop-off location.
-            </p>
-            <div class="feature-list">
-                <div class="feature">
-                    <span class="feature-icon">📁</span>
-                    <span>Upload CSV with addresses and coordinates</span>
-                </div>
-                <div class="feature">
-                    <span class="feature-icon">🗺️</span>
-                    <span>K-means clustering groups addresses by geography</span>
-                </div>
-                <div class="feature">
-                    <span class="feature-icon">🚗</span>
-                    <span>Nearest-neighbor algorithm optimizes route order</span>
-                </div>
-                <div class="feature">
-                    <span class="feature-icon">📥</span>
-                    <span>Download routes as HTML or TXT files</span>
-                </div>
-            </div>
-            <a href="routeoptimizer.html" class="btn-primary">
-                Open Route Optimizer
-            </a>
-        </section>
-
         <section class="card">
             <div class="routes-header">
                 <h2>
@@ -457,8 +481,42 @@
             <p class="section-description">
                 View individual driver route pages with interactive maps and turn-by-turn addresses.
             </p>
+            <div id="overview-link" style="display:none; margin-bottom: 15px;">
+                <a href="routes/overview.html" class="btn-primary" style="display: inline-flex; align-items: center; gap: 8px;">
+                    <span>View Overview Map</span>
+                </a>
+                <span id="event-datetime" style="margin-left: 15px; color: #666; font-size: 0.95rem;"></span>
+            </div>
             <div class="routes-list" id="routes-list">
                 <div class="loading-state">Loading routes...</div>
+            </div>
+        </section>
+
+        <section class="card tools-card">
+            <div class="tools-header" onclick="toggleTools()">
+                <h2>
+                    <span class="section-icon">🔧</span>
+                    Admin Tools
+                </h2>
+                <span class="tools-toggle" id="tools-toggle">▼</span>
+            </div>
+            <div class="tools-content" id="tools-content">
+                <div class="tools-grid">
+                    <a href="geocoder.html" class="tool-link">
+                        <span class="tool-icon">📍</span>
+                        <div class="tool-info">
+                            <strong>Address Geocoder</strong>
+                            <span>Convert addresses to coordinates</span>
+                        </div>
+                    </a>
+                    <a href="routeoptimizer.html" class="tool-link">
+                        <span class="tool-icon">📊</span>
+                        <div class="tool-info">
+                            <strong>Route Optimizer</strong>
+                            <span>Generate driver routes</span>
+                        </div>
+                    </a>
+                </div>
             </div>
         </section>
     </main>
@@ -466,7 +524,7 @@
     <footer class="footer">
         <div class="footer-content">
             <div class="footer-brand">
-                <span class="footer-logo">🍞</span>
+                <img src="https://bettylouspantry.com/wp-content/uploads/2023/06/cropped-bettylouslogo.png" alt="Betty Lou's Pantry" class="footer-logo">
                 <span>Betty Lou's Pantry</span>
             </div>
             <div class="footer-links">
@@ -515,11 +573,41 @@
             return { name, stops, miles };
         }
 
+        function toggleTools() {
+            const content = document.getElementById('tools-content');
+            const toggle = document.getElementById('tools-toggle');
+            content.classList.toggle('collapsed');
+            toggle.classList.toggle('collapsed');
+        }
+
+        async function checkOverview() {
+            try {
+                const response = await fetch('routes/overview.html');
+                if (response.ok) {
+                    const html = await response.text();
+                    document.getElementById('overview-link').style.display = 'block';
+
+                    // Try to extract event date/time from overview
+                    const parser = new DOMParser();
+                    const doc = parser.parseFromString(html, 'text/html');
+                    const eventEl = doc.querySelector('.event-datetime');
+                    if (eventEl) {
+                        document.getElementById('event-datetime').textContent = eventEl.textContent;
+                    }
+                }
+            } catch (e) {
+                // No overview file
+            }
+        }
+
         async function discoverRoutes() {
             const container = document.getElementById('routes-list');
             const updatedEl = document.getElementById('routes-updated');
             const routes = [];
             const maxDrivers = 50;
+
+            // Check for overview.html
+            checkOverview();
 
             // Probe for route files
             const probePromises = [];

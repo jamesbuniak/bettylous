@@ -245,6 +245,11 @@
                         <input type="number" id="driverCount" value="20" min="1" max="100" style="width: 70px;">
                     </div>
 
+                    <div class="form-group" style="margin: 0;">
+                        <label for="eventDateTime" style="font-weight: 600;">Event Date & Time</label>
+                        <input type="datetime-local" id="eventDateTime" style="width: 200px;">
+                    </div>
+
                     <details style="flex: 1; min-width: 200px;">
                         <summary style="cursor: pointer; color: #666; font-size: 0.9rem; padding: 8px 0;">⚙️ Advanced Settings</summary>
                         <div style="display: flex; gap: 15px; flex-wrap: wrap; margin-top: 10px; padding: 10px; background: #f9f9f9; border-radius: 6px;">
@@ -4427,8 +4432,19 @@
             var mins = estimatedMinutes % 60;
             var timeStr = hours > 0 ? hours + 'h ' + mins + 'm' : mins + ' min';
 
+            // Get event date/time if set
+            var eventDateTimeEl = document.getElementById('eventDateTime');
+            var eventDateTimeStr = '';
+            if (eventDateTimeEl && eventDateTimeEl.value) {
+                var eventDate = new Date(eventDateTimeEl.value);
+                eventDateTimeStr = eventDate.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }) + ' at ' + eventDate.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+            }
+
             html += '<div class="header"><h1>🍞 ' + escapeHtml(driver.name) + '</h1>';
             html += '<p>Betty Lou\'s Pantry — Letter Carrier Food Drive</p>';
+            if (eventDateTimeStr) {
+                html += '<p class="event-datetime" style="margin-top:8px;font-size:1.1rem;font-weight:600;">' + escapeHtml(eventDateTimeStr) + '</p>';
+            }
             html += '<div class="stats"><div class="stat"><div class="stat-value">' + cluster.length + '</div><div class="stat-label">Stops</div></div>';
             html += '<div class="stat"><div class="stat-value">' + miles + '</div><div class="stat-label">Miles</div></div>';
             html += '<div class="stat"><div class="stat-value">' + workScore + '</div><div class="stat-label">Work</div></div>';
@@ -4467,17 +4483,164 @@
         function copyDriver(index) {
             navigator.clipboard.writeText(getDriverText(index)).then(function() { showToast('Copied to clipboard!'); });
         }
-        
+
+        function generateOverviewHtml() {
+            var totalMiles = 0;
+            var totalStops = 0;
+            var totalWork = 0;
+            for (var i = 0; i < clusters.length; i++) {
+                totalMiles += clusters[i].totalMiles || 0;
+                totalStops += clusters[i].length;
+                totalWork += clusters[i].bucketWork || 0;
+            }
+
+            // Get event date/time if set
+            var eventDateTimeEl = document.getElementById('eventDateTime');
+            var eventDateTimeStr = '';
+            if (eventDateTimeEl && eventDateTimeEl.value) {
+                var eventDate = new Date(eventDateTimeEl.value);
+                eventDateTimeStr = eventDate.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }) + ' at ' + eventDate.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+            }
+
+            var generatedTime = new Date().toLocaleString();
+            var routeColors = ['#E87C1E', '#2196F3', '#4CAF50', '#9C27B0', '#F44336', '#00BCD4', '#FF9800', '#795548', '#607D8B', '#E91E63'];
+
+            var html = '<!DOCTYPE html><html lang="en"><head>';
+            html += '<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">';
+            html += '<title>Route Overview - Betty Lou\'s Pantry</title>';
+            html += '<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>';
+            html += '<style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:#f5f5f5}';
+            html += '.header{background:linear-gradient(135deg,#E87C1E 0%,#C4650F 100%);color:white;padding:25px;text-align:center}';
+            html += '.header h1{font-size:2rem;margin-bottom:5px}.header p{opacity:0.9}';
+            html += '.event-datetime{margin-top:10px;font-size:1.2rem;font-weight:600}';
+            html += '.stats{display:flex;justify-content:center;gap:40px;padding:20px;background:rgba(0,0,0,0.1);margin-top:15px;border-radius:10px;flex-wrap:wrap}';
+            html += '.stat{text-align:center}.stat-value{font-size:1.8rem;font-weight:700}.stat-label{font-size:0.9rem;opacity:0.9}';
+            html += '#map{width:100%;height:500px}.container{max-width:1000px;margin:0 auto;padding:20px}';
+            html += '.legend{display:flex;flex-wrap:wrap;gap:10px;margin:20px 0}';
+            html += '.legend-item{display:flex;align-items:center;gap:8px;padding:8px 15px;background:white;border-radius:8px;box-shadow:0 2px 5px rgba(0,0,0,0.1)}';
+            html += '.legend-color{width:20px;height:20px;border-radius:50%}';
+            html += '.driver-links{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px;margin-top:20px}';
+            html += '.driver-link{display:flex;align-items:center;gap:10px;padding:12px 15px;background:white;border-radius:8px;text-decoration:none;color:#333;transition:all 0.2s;box-shadow:0 2px 5px rgba(0,0,0,0.1)}';
+            html += '.driver-link:hover{transform:translateY(-2px);box-shadow:0 4px 10px rgba(0,0,0,0.15)}';
+            html += '.meta{text-align:center;padding:20px;color:#888;font-size:0.85rem}';
+            html += '</style></head><body>';
+
+            html += '<div class="header"><h1>Betty Lou\'s Pantry</h1>';
+            html += '<p>Letter Carrier Food Drive — Route Overview</p>';
+            if (eventDateTimeStr) {
+                html += '<p class="event-datetime">' + escapeHtml(eventDateTimeStr) + '</p>';
+            }
+            html += '<div class="stats">';
+            html += '<div class="stat"><div class="stat-value">' + drivers.length + '</div><div class="stat-label">Drivers</div></div>';
+            html += '<div class="stat"><div class="stat-value">' + totalStops + '</div><div class="stat-label">Total Stops</div></div>';
+            html += '<div class="stat"><div class="stat-value">' + totalMiles.toFixed(1) + '</div><div class="stat-label">Total Miles</div></div>';
+            html += '</div></div>';
+
+            html += '<div id="map"></div>';
+            html += '<div class="container">';
+
+            // Legend
+            html += '<div class="legend">';
+            for (var i = 0; i < drivers.length; i++) {
+                var color = routeColors[i % routeColors.length];
+                var miles = (clusters[i].totalMiles || 0).toFixed(1);
+                html += '<div class="legend-item">';
+                html += '<div class="legend-color" style="background:' + color + '"></div>';
+                html += '<span>' + escapeHtml(drivers[i].name) + ' (' + clusters[i].length + ' stops, ' + miles + ' mi)</span>';
+                html += '</div>';
+            }
+            html += '</div>';
+
+            // Driver links
+            html += '<h3 style="margin:20px 0 10px;color:#333;">Individual Driver Routes</h3>';
+            html += '<div class="driver-links">';
+            for (var i = 0; i < drivers.length; i++) {
+                var filename = 'driver-' + (i + 1) + '-route.html';
+                html += '<a href="' + filename + '" class="driver-link">';
+                html += '<span style="font-size:1.5rem;">🚗</span>';
+                html += '<span>' + escapeHtml(drivers[i].name) + '</span>';
+                html += '</a>';
+            }
+            html += '</div>';
+
+            html += '<div class="meta">Generated: ' + escapeHtml(generatedTime) + ' | Betty Lou\'s Pantry Route Optimizer</div>';
+            html += '</div>';
+
+            // Map JavaScript
+            html += '<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"><\/script>';
+            html += '<script>';
+            html += 'var map=L.map("map").setView([' + dropoff.lat + ',' + dropoff.lng + '],12);';
+            html += 'L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{attribution:"OpenStreetMap"}).addTo(map);';
+
+            // Add markers and routes for each driver
+            html += 'var bounds=L.latLngBounds();';
+            html += 'var colors=' + JSON.stringify(routeColors) + ';';
+
+            for (var i = 0; i < clusters.length; i++) {
+                var cluster = clusters[i];
+                var color = routeColors[i % routeColors.length];
+
+                // Add route line
+                html += 'var latlngs' + i + '=[';
+                for (var j = 0; j < cluster.length; j++) {
+                    if (j > 0) html += ',';
+                    html += '[' + cluster[j].lat + ',' + cluster[j].lng + ']';
+                }
+                html += '];';
+                // Extend bounds for each point
+                for (var j = 0; j < cluster.length; j++) {
+                    html += 'bounds.extend([' + cluster[j].lat + ',' + cluster[j].lng + ']);';
+                }
+                html += 'L.polyline(latlngs' + i + ',{color:"' + color + '",weight:3,opacity:0.7}).addTo(map);';
+
+                // Add center marker for driver number
+                if (cluster.length > 0) {
+                    var centerLat = 0, centerLng = 0;
+                    for (var j = 0; j < cluster.length; j++) {
+                        centerLat += cluster[j].lat;
+                        centerLng += cluster[j].lng;
+                    }
+                    centerLat /= cluster.length;
+                    centerLng /= cluster.length;
+                    html += 'L.marker([' + centerLat + ',' + centerLng + '],{icon:L.divIcon({className:"m",html:\'<div style="background:' + color + ';color:white;width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:bold;border:3px solid white;box-shadow:0 2px 5px rgba(0,0,0,0.3);">' + (i + 1) + '</div>\',iconSize:[28,28],iconAnchor:[14,14]})}).addTo(map);';
+                }
+            }
+
+            // Dropoff marker
+            html += 'bounds.extend([' + dropoff.lat + ',' + dropoff.lng + ']);';
+            html += 'L.marker([' + dropoff.lat + ',' + dropoff.lng + '],{icon:L.divIcon({className:"d",html:\'<div style="font-size:24px;">🏁</div>\',iconSize:[24,24],iconAnchor:[12,12]})}).addTo(map);';
+            html += 'map.fitBounds(bounds,{padding:[30,30]});';
+            html += '<\/script></body></html>';
+
+            return html;
+        }
+
         downloadAllHtmlBtn.addEventListener('click', function() {
             var zip = new JSZip();
+
+            // Add overview.html
+            zip.file('overview.html', generateOverviewHtml());
+
+            // Add individual driver routes with numbered filenames for index.html discovery
             for (var i = 0; i < clusters.length; i++) {
-                zip.file(slugify(drivers[i].name) + '-route.html', generateDriverHtml(i));
+                zip.file('driver-' + (i + 1) + '-route.html', generateDriverHtml(i));
             }
-            
+
             var totalMiles = 0;
             for (var i = 0; i < clusters.length; i++) totalMiles += clusters[i].totalMiles || 0;
-            
+
+            // Get event date/time for summary
+            var eventDateTimeEl = document.getElementById('eventDateTime');
+            var eventDateTimeStr = '';
+            if (eventDateTimeEl && eventDateTimeEl.value) {
+                var eventDate = new Date(eventDateTimeEl.value);
+                eventDateTimeStr = eventDate.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }) + ' at ' + eventDate.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+            }
+
             var summary = 'Betty Lou\'s Pantry - Letter Carrier Food Drive\nRoute Summary\n==================================================\n\n';
+            if (eventDateTimeStr) {
+                summary += 'Event: ' + eventDateTimeStr + '\n';
+            }
             summary += 'Generated: ' + new Date().toLocaleString() + '\n';
             summary += 'Drop-off: ' + dropoff.address + '\n';
             summary += 'Total Addresses: ' + addresses.length + '\n';
@@ -4488,7 +4651,7 @@
                 summary += drivers[i].name + ': ' + clusters[i].length + ' stops, ' + miles + ' mi\n';
             }
             zip.file('summary.txt', summary);
-            
+
             zip.generateAsync({ type: 'blob' }).then(function(content) {
                 downloadFile(content, 'betty-lous-pantry-routes-' + new Date().toISOString().slice(0, 10) + '.zip', 'application/zip');
             });
@@ -4531,11 +4694,28 @@
             var overviewSection = document.createElement('div');
             overviewSection.style.cssText = 'position:absolute;left:-9999px;background:white;padding:20px;width:900px;';
 
+            // Get event date/time if set
+            var eventDateTimeEl = document.getElementById('eventDateTime');
+            var eventDateTimeStr = '';
+            if (eventDateTimeEl && eventDateTimeEl.value) {
+                var eventDate = new Date(eventDateTimeEl.value);
+                eventDateTimeStr = eventDate.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }) + ' at ' + eventDate.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+            }
+
             // Title
             var title = document.createElement('h2');
             title.textContent = "Betty Lou's Pantry - Route Overview";
-            title.style.cssText = 'margin:0 0 15px 0;color:#E87C1E;text-align:center;';
+            title.style.cssText = 'margin:0 0 5px 0;color:#E87C1E;text-align:center;';
             overviewSection.appendChild(title);
+
+            // Event date/time
+            if (eventDateTimeStr) {
+                var eventEl = document.createElement('p');
+                eventEl.className = 'event-datetime';
+                eventEl.textContent = eventDateTimeStr;
+                eventEl.style.cssText = 'margin:0 0 15px 0;text-align:center;font-size:1.1rem;font-weight:600;color:#333;';
+                overviewSection.appendChild(eventEl);
+            }
 
             // Stats
             var statsClone = document.getElementById('totalStats').cloneNode(true);
